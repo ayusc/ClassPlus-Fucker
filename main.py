@@ -221,6 +221,7 @@ async def download_and_merge(link, folder_index, video_index, event):
             logger.debug(f"Deleted thumbnail: {thumbnail_path}")
 
         await progress_message.delete()
+
         logger.info(f"Lecture {video_index} uploaded successfully.")
 
         # Clean up
@@ -247,7 +248,7 @@ async def handle_iit_command(event):
     
     set_processing_status(True)
     
-    await event.delete()
+    #await event.delete()
     logger.info("Received .iit command.")
     user_input = event.pattern_match.group(1)
     parts = user_input.split()
