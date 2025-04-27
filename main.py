@@ -153,7 +153,10 @@ async def download_and_merge(link, folder_index, video_index, event):
     max_parallel_downloads = 10  # limit to 10 concurrent downloads per video
     semaphore = asyncio.Semaphore(max_parallel_downloads)
 
-    async with aiohttp.ClientSession() as session:
+    headers = {
+     "User-Agent": "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.74 Mobile Safari/537.36"
+    }
+    async with aiohttp.ClientSession(headers=headers) as session:
         for i in range(START_PART, MAX_PARTS):
             part_name = f"{prefix}{i:03d}.ts"
             full_url = f"{parsed_url.scheme}://{parsed_url.netloc}{base_path}/{part_name}"
