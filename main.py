@@ -48,11 +48,12 @@ def extract_details(ts_url):
     path_parts = parsed_url.path.rsplit('/', 1)
     filename = path_parts[-1]
 
-    match1 = re.match(r"(720p)_(\d{3})\.ts", filename)
-    match2 = re.match(r"(data)(\d+)\.ts", filename)
+    # Match like 720p_125.ts OR data125.ts
+    match1 = re.match(r"(720p)_\d+\.ts", filename)
+    match2 = re.match(r"(data)\d+\.ts", filename)
 
     if match1:
-        prefix = match1.group(1)
+        prefix = match1.group(1) + "_"
         base_path = path_parts[0]
         return prefix, base_path, parsed_url
     elif match2:
@@ -61,6 +62,7 @@ def extract_details(ts_url):
         return prefix, base_path, parsed_url
     else:
         return None, None, None
+
 
 async def download_and_merge(link, folder_index, video_index, event):
     logger.info(f"Processing video {video_index} for link: {link}")
@@ -76,7 +78,6 @@ async def download_and_merge(link, folder_index, video_index, event):
     query = parsed_url.query
 
     downloaded_files = []
-
     progress_message = await event.reply(f"Lecture {video_index}\nDownloading parts...")
     logger.info(f"Started downloading parts for video {video_index}...")
 
@@ -86,6 +87,7 @@ async def download_and_merge(link, folder_index, video_index, event):
         full_url = f"{parsed_url.scheme}://{parsed_url.netloc}{base_path}/{part_name}"
         if query:
             full_url += f"?{query}"
+
         local_path = os.path.join(output_dir, part_name)
 
         try:
@@ -96,18 +98,19 @@ async def download_and_merge(link, folder_index, video_index, event):
                         f.write(chunk)
                 downloaded_files.append(part_name)
                 logger.info(f"Downloaded part: {part_name}")
+                await progress_message.edit(f"Lecture {video_index}\nDownloaded: {part_name}")
                 misses = 0
             else:
+                logger.warning(f"Part missing: {part_name}")
                 misses += 1
-                logger.warning(f"Part {part_name} not found (miss #{misses})")
                 if misses >= STOP_AFTER_MISSES:
                     logger.warning(f"Stopping download after {STOP_AFTER_MISSES} consecutive misses.")
                     break
         except Exception as e:
-            misses += 1
             logger.error(f"Error downloading {part_name}: {e}")
+            misses += 1
             if misses >= STOP_AFTER_MISSES:
-                logger.error(f"Stopping download after {STOP_AFTER_MISSES} consecutive errors.")
+                logger.error(f"Stopping after {STOP_AFTER_MISSES} consecutive errors.")
                 break
 
     if downloaded_files:
@@ -131,21 +134,25 @@ async def download_and_merge(link, folder_index, video_index, event):
 
             await client.send_file(event.chat_id, output_video, caption=f"Lecture {video_index}")
 
-            # Cleanup
+            # Clean up
             os.remove(list_path)
             for file in downloaded_files:
-                os.remove(os.path.join(output_dir, file))
+                try:
+                    os.remove(os.path.join(output_dir, file))
+                except Exception as e:
+                    logger.warning(f"Error deleting part {file}: {e}")
             os.remove(output_video)
 
-            await progress_message.edit(f"Lecture {video_index} processing completed successfully.")
-            logger.info(f"Lecture {video_index} processing completed successfully.")
+            await progress_message.edit(f"Lecture {video_index} processed successfully.")
+            logger.info(f"Lecture {video_index} processed successfully.")
 
-        except subprocess.CalledProcessError as e:
-            await progress_message.edit(f"Lecture {video_index} merging failed using ffmpeg.")
-            logger.error(f"FFmpeg merge failed for Lecture {video_index}: {e}")
+        except subprocess.CalledProcessError:
+            await progress_message.edit(f"Lecture {video_index} merging failed.")
+            logger.error(f"FFmpeg merge failed for Lecture {video_index}.")
     else:
-        await progress_message.edit(f"Lecture {video_index} has no parts downloaded to merge.")
+        await progress_message.edit(f"Lecture {video_index} has no parts downloaded.")
         logger.warning(f"No parts downloaded for Lecture {video_index}.")
+
 
 @client.on(events.NewMessage(pattern=r'^\.iit\s+(.+)', outgoing=True))
 async def handle_links(event):
