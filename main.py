@@ -112,7 +112,7 @@ async def download_and_merge(link, folder_index, video_index, event):
     else event.reply_to_msg_id 
     prefix, base_path, parsed_url = extract_details(link)
     if prefix is None:
-        await client.send_message(event.chat_id, (f"Invalid URL format: {link}", reply_to=topic_id)
+        await client.send_message(event.chat_id, f"Invalid URL format: {link}", reply_to=topic_id)
         logger.error(f"Invalid URL format: {link}")
         return
 
