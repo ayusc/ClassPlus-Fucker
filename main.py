@@ -8,8 +8,8 @@ from urllib.parse import urlparse
 from telethon import TelegramClient, events
 
 # Configuration
-API_ID = int(os.getenv("API_ID"))         # your Telegram api_id
-API_HASH = os.getenv("API_HASH")           # your Telegram api_hash
+API_ID = int(os.getenv("API_ID"))         # your Telegram API ID
+API_HASH = os.getenv("API_HASH")           # your Telegram API Hash
 SESSION_NAME = "userbot"                   # Session name for your userbot
 BASE_DIR = "CLASSPLUS"
 MAX_LINKS = 5
@@ -18,7 +18,10 @@ START_PART = 0
 STOP_AFTER_MISSES = 3
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    format='[%(asctime)s] %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 # Initialize Telethon client
@@ -32,6 +35,7 @@ def clear_base_dir():
         logger.info(f"Clearing contents of {BASE_DIR}...")
         shutil.rmtree(BASE_DIR)
     os.makedirs(BASE_DIR, exist_ok=True)
+    logger.info(f"Recreated {BASE_DIR} directory after clearing.")
 
 def extract_details(ts_url):
     parsed_url = urlparse(ts_url)
@@ -67,7 +71,6 @@ async def download_and_merge(link, folder_index, video_index, event):
 
     downloaded_files = []
 
-    # Send initial message
     progress_message = await event.reply(f"Lecture {video_index}\nDownloading parts...")
     logger.info(f"Started downloading parts for video {video_index}...")
 
@@ -90,13 +93,15 @@ async def download_and_merge(link, folder_index, video_index, event):
                 misses = 0
             else:
                 misses += 1
+                logger.warning(f"Part {part_name} not found (miss #{misses})")
                 if misses >= STOP_AFTER_MISSES:
-                    logger.warning(f"Failed to download part: {part_name}. Stopping after {STOP_AFTER_MISSES} misses.")
+                    logger.warning(f"Stopping download after {STOP_AFTER_MISSES} consecutive misses.")
                     break
         except Exception as e:
             misses += 1
+            logger.error(f"Error downloading {part_name}: {e}")
             if misses >= STOP_AFTER_MISSES:
-                logger.error(f"Error downloading part: {part_name}. Stopping after {STOP_AFTER_MISSES} misses.")
+                logger.error(f"Stopping download after {STOP_AFTER_MISSES} consecutive errors.")
                 break
 
     if downloaded_files:
@@ -107,19 +112,17 @@ async def download_and_merge(link, folder_index, video_index, event):
 
         output_video = os.path.join(output_dir, f"Lecture{video_index}.mp4")
         try:
-            # Update progress to merging
             await progress_message.edit(f"Lecture {video_index}\nMerging parts...")
-            logger.info(f"Started merging parts for video {video_index}...")
+            logger.info(f"Merging parts for video {video_index}...")
 
             subprocess.run([
                 "ffmpeg", "-f", "concat", "-safe", "0",
                 "-i", "file_list.txt", "-c", "copy", f"Lecture{video_index}.mp4"
             ], cwd=output_dir, check=True)
 
-            # Update progress to uploading
             await progress_message.edit(f"Lecture {video_index}\nUploading to Telegram...")
+            logger.info(f"Uploading merged video {output_video}...")
 
-            # Send video
             await client.send_file(event.chat_id, output_video, caption=f"Lecture {video_index}")
 
             # Cleanup
@@ -129,22 +132,23 @@ async def download_and_merge(link, folder_index, video_index, event):
             os.remove(output_video)
 
             await progress_message.edit(f"Lecture {video_index} processing completed successfully.")
-            logger.info(f"Video {video_index} processing completed successfully.")
+            logger.info(f"Lecture {video_index} processing completed successfully.")
 
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as e:
             await progress_message.edit(f"Lecture {video_index} merging failed using ffmpeg.")
-            logger.error(f"Error merging video {video_index} using ffmpeg.")
+            logger.error(f"FFmpeg merge failed for Lecture {video_index}: {e}")
     else:
         await progress_message.edit(f"Lecture {video_index} has no parts downloaded to merge.")
-        logger.warning(f"Video {video_index} has no parts downloaded to merge.")
+        logger.warning(f"No parts downloaded for Lecture {video_index}.")
 
 @client.on(events.NewMessage(pattern=r'^\.iit\s+(.+)', outgoing=True))
 async def handle_links(event):
+    logger.info(f"Received .iit command from user.")
     user_input = event.pattern_match.group(1)
     links = user_input.split()
     if len(links) > MAX_LINKS:
-        await event.reply(f"Please provide up to {MAX_LINKS} links.")
-        logger.warning(f"User provided more than {MAX_LINKS} links.")
+        await event.reply(f"Please provide up to {MAX_LINKS} links only.")
+        logger.warning(f"More than {MAX_LINKS} links received.")
         return
 
     valid_links = []
@@ -156,15 +160,19 @@ async def handle_links(event):
             return
         valid_links.append(link)
 
-    # Clear the BASE_DIR before processing new links
     clear_base_dir()
 
-    await event.reply("Processing your links. This may take a while...")
-    logger.info(f"Started processing {len(valid_links)} valid links.")
+    await event.reply("Processing your links now...")
+    logger.info(f"Processing {len(valid_links)} links.")
 
     for idx, link in enumerate(valid_links, 1):
         video_index = idx
         await download_and_merge(link, idx, video_index, event)
+
+@client.on(events.NewMessage(pattern=r'^\.ping$', outgoing=True))
+async def ping(event):
+    logger.info(f"Received .ping command.")
+    await event.reply("✅ Userbot is alive and running!")
 
 def main():
     client.start()
