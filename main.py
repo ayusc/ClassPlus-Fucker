@@ -126,7 +126,7 @@ async def download_part(session, url, save_path, semaphore):
             return False
 
 # Modify your download_and_merge
-async def download_and_merge(link, folder_index, video_index, event):
+async def download_and_merge(link, folder_index, video_index, event, topic_id):
     logger.info(f"Processing video {video_index} for link: {link}")
     topic_id = None 
 
@@ -316,15 +316,12 @@ async def handle_iit_command(event):
 
     clear_base_dir()
 
-    # Save necessary info from event now
-    chat_id = event.chat_id
-
     # Process all links concurrently
     tasks = []
     for idx, link in enumerate(valid_links):
         video_index = start_index + idx
         tasks.append(asyncio.create_task(
-            download_and_merge(link, idx + 1, video_index, chat_id, topic_id)
+            download_and_merge(link, idx + 1, video_index, event)
         ))
 
     await asyncio.gather(*tasks)
