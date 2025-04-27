@@ -6,6 +6,7 @@ import logging
 from urllib.parse import urlparse
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+import shutil
 
 # Configuration
 MAX_LINKS = 5
@@ -20,6 +21,12 @@ logger = logging.getLogger(__name__)
 
 # Ensure BASE_DIR exists
 os.makedirs(BASE_DIR, exist_ok=True)
+
+def clear_base_dir():
+    if os.path.exists(BASE_DIR):
+        logger.info(f"Clearing contents of {BASE_DIR}...")
+        shutil.rmtree(BASE_DIR)  # Delete all contents of the directory
+    os.makedirs(BASE_DIR, exist_ok=True)  # Recreate the directory after clearing
 
 def extract_details(ts_url):
     parsed_url = urlparse(ts_url)
@@ -162,6 +169,9 @@ async def handle_links(update: Update, context: CallbackContext):
             logger.error(f"Invalid link format: {link}")
             return
         valid_links.append(link)
+
+    # Clear the IITJAM folder before processing new links
+    clear_base_dir()
 
     await update.message.reply_text("Processing your links. This may take a while...")
     logger.info(f"Started processing {len(valid_links)} valid links.")
