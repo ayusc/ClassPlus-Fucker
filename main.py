@@ -16,7 +16,7 @@ API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 SESSION_STRING = os.getenv("SESSION_STRING")
 BASE_DIR = "CLASSPLUS"
-MAX_LINKS = 5
+MAX_LINKS = 4
 MAX_PARTS = 10000
 START_PART = 0
 STOP_AFTER_MISSES = 3
@@ -38,6 +38,14 @@ else:
 
 # Ensure BASE_DIR exists
 os.makedirs(BASE_DIR, exist_ok=True)
+
+# To track if a task is in progress
+is_processing = False
+
+# Locking the processing to prevent multiple simultaneous .iit commands
+def set_processing_status(status: bool):
+    global is_processing
+    is_processing = status
 
 def clear_base_dir():
     if os.path.exists(BASE_DIR):
@@ -232,6 +240,13 @@ async def download_and_merge(link, folder_index, video_index, event):
 
 @client.on(events.NewMessage(pattern=r'^\.iit\s+(.+)', outgoing=True))
 async def handle_iit_command(event):
+    global is_processing
+    if is_processing:
+        await event.reply("❌ Another task is already in progress. Please wait for it to finish before running again.")
+        return
+    
+    set_processing_status(True)
+    
     await event.delete()
     logger.info("Received .iit command.")
     user_input = event.pattern_match.group(1)
@@ -239,17 +254,20 @@ async def handle_iit_command(event):
 
     if len(parts) < 2:
         await event.reply("❌ Usage: `.iit <start_no> <link1> <link2> ...`\n(up to 5 links allowed)")
+        set_processing_status(False)
         return
 
     try:
         start_index = int(parts[0])
     except ValueError:
         await event.reply("❌ Start number must be an integer.\nUsage: `.iit <start_no> <link1> <link2> ...`")
+        set_processing_status(False)
         return
 
     links = parts[1:]
     if len(links) > MAX_LINKS:
         await event.reply(f"❌ You can provide up to {MAX_LINKS} links only.")
+        set_processing_status(False)
         return
 
     valid_links = []
@@ -257,15 +275,21 @@ async def handle_iit_command(event):
         prefix, base_path, parsed_url = extract_details(link)
         if prefix is None:
             await event.reply(f"❌ Invalid URL format: {link}")
+            set_processing_status(False)
             return
         valid_links.append(link)
 
     clear_base_dir()
-    #await event.reply(f"Processing {len(valid_links)} links...")
 
+    # Process all links concurrently
+    tasks = []
     for idx, link in enumerate(valid_links):
         video_index = start_index + idx
-        await download_and_merge(link, idx + 1, video_index, event)
+        tasks.append(asyncio.create_task(download_and_merge(link, idx + 1, video_index, event)))
+
+    await asyncio.gather(*tasks)
+    
+    set_processing_status(False)
 
 @client.on(events.NewMessage(pattern=r'^\.ping$', outgoing=True))
 async def ping(event):
