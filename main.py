@@ -24,7 +24,7 @@ STOP_AFTER_MISSES = 3
 # Setup logging
 logging.basicConfig(
     format='[%(asctime)s] %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
