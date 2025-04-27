@@ -103,12 +103,41 @@ def create_thumbnail(video_path, thumb_path):
         logger.error(f"Failed to create thumbnail: {e}")
 
 
-async def download_and_merge(link, folder_index, video_index, chat_id, reply_to):
+import aiohttp
+
+# New helper for downloading parts asynchronously
+async def download_part(session, url, save_path, semaphore):
+    async with semaphore:
+        try:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status == 200:
+                    with open(save_path, 'wb') as f:
+                        while True:
+                            chunk = await resp.content.read(1024)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                    return True
+                else:
+                    logger.warning(f"Part not found at {url} (HTTP {resp.status})")
+                    return False
+        except Exception as e:
+            logger.error(f"Error downloading {url}: {e}")
+            return False
+
+# Modify your download_and_merge
+async def download_and_merge(link, folder_index, video_index, event):
     logger.info(f"Processing video {video_index} for link: {link}")
+    topic_id = None 
+
+    if getattr(event.reply_to, 'forum_topic', None):
+        topic_id = top if (top := event.reply_to.reply_to_top_id) else event.reply_to_msg_id
+    else:
+        topic_id = event.reply_to_msg_id
 
     prefix, base_path, parsed_url = extract_details(link)
     if prefix is None:
-        await client.send_message(chat_id, f"Invalid URL format: {link}", reply_to=reply_to)
+        await client.send_message(event.chat_id, f"Invalid URL format: {link}", reply_to=topic_id)
         logger.error(f"Invalid URL format: {link}")
         return
 
@@ -116,51 +145,51 @@ async def download_and_merge(link, folder_index, video_index, chat_id, reply_to)
     os.makedirs(output_dir, exist_ok=True)
     query = parsed_url.query
 
+    progress_message = await client.send_message(event.chat_id, f"Lecture {video_index}\nDownloading...", reply_to=topic_id)
+
     downloaded_files = []
-    progress_message = await client.send_message(chat_id, f"Lecture {video_index}\nDownloading...", reply_to=reply_to)
-
     misses = 0
-    for i in range(START_PART, MAX_PARTS):
-        part_name = f"{prefix}{i:03d}.ts"
-        full_url = f"{parsed_url.scheme}://{parsed_url.netloc}{base_path}/{part_name}"
-        if query:
-            full_url += f"?{query}"
+    download_tasks = []
+    max_parallel_downloads = 10  # limit to 10 concurrent downloads per video
+    semaphore = asyncio.Semaphore(max_parallel_downloads)
 
-        local_path = os.path.join(output_dir, part_name)
+    async with aiohttp.ClientSession() as session:
+        for i in range(START_PART, MAX_PARTS):
+            part_name = f"{prefix}{i:03d}.ts"
+            full_url = f"{parsed_url.scheme}://{parsed_url.netloc}{base_path}/{part_name}"
+            if query:
+                full_url += f"?{query}"
 
-        if os.path.exists(local_path):
-            logger.debug(f"Skipping existing part: {part_name}")
-            continue
+            local_path = os.path.join(output_dir, part_name)
 
-        part_failures = 0
-        while part_failures < 3:
-            try:
-                res = requests.get(full_url, stream=True, timeout=10)
-                if res.status_code == 200:
-                    with open(local_path, 'wb') as f:
-                        for chunk in res.iter_content(chunk_size=1024):
-                            f.write(chunk)
-                    downloaded_files.append(part_name)
-                    logger.info(f"Downloaded part: {part_name}")
+            if os.path.exists(local_path):
+                logger.debug(f"Skipping existing part: {part_name}")
+                downloaded_files.append(part_name)
+                continue
+
+            # create a download task for each part
+            task = asyncio.create_task(download_part(session, full_url, local_path, semaphore))
+            download_tasks.append((task, part_name))
+
+        # Run all downloads
+        results = await asyncio.gather(*(task for task, _ in download_tasks))
+
+        # Check which parts downloaded successfully
+        for (success, (task, part_name)) in zip(results, download_tasks):
+            if success:
+                downloaded_files.append(part_name)
+            else:
+                misses += 1
+                if misses >= STOP_AFTER_MISSES:
+                    logger.warning(f"Stopping download after {STOP_AFTER_MISSES} consecutive misses.")
                     break
-                else:
-                    logger.warning(f"Part not found: {part_name} (HTTP {res.status_code})")
-            except Exception as e:
-                logger.error(f"Error downloading {part_name}: {e}")
-            part_failures += 1
-
-        if part_failures == 3:
-            misses += 1
-            logger.warning(f"Part {part_name} failed 3 times. Total misses: {misses}")
-
-        if misses >= STOP_AFTER_MISSES:
-            logger.warning(f"Stopping download after {STOP_AFTER_MISSES} consecutive misses.")
-            break
 
     if not downloaded_files:
         await progress_message.edit(f"Lecture {video_index}\nNo parts downloaded!")
         logger.warning(f"No parts downloaded for Lecture {video_index}.")
         return
+
+    # Now merging and uploading same as your code...
 
     list_path = os.path.join(output_dir, "file_list.txt")
     with open(list_path, 'w') as f:
@@ -175,8 +204,8 @@ async def download_and_merge(link, folder_index, video_index, chat_id, reply_to)
 
         subprocess.run([
             "ffmpeg", "-f", "concat", "-safe", "0",
-            "-i", list_path, "-c", "copy", output_video
-        ], check=True)
+            "-i", "file_list.txt", "-c", "copy", f"Lecture{video_index}.mp4"
+        ], cwd=output_dir, check=True)
 
         logger.info(f"Merging completed for {output_video}.")
 
@@ -194,16 +223,16 @@ async def download_and_merge(link, folder_index, video_index, chat_id, reply_to)
                 logger.info(f"Uploading {output_video}: {percent}% done.")
                 try:
                     await progress_message.edit(f"Lecture {video_index}\nUploading... {percent}%")
-                except Exception:
+                except:
                     pass
 
         thumbnail_path = os.path.join(output_dir, f"thumb_{video_index}.jpg")
         width, height, duration = get_video_metadata(output_video, thumb_path=thumbnail_path)
 
         await client.send_file(
-            chat_id,
+            event.chat_id,
             output_video,
-            reply_to=reply_to,
+            reply_to=topic_id,
             caption=f"Lecture {video_index}",
             thumb=thumbnail_path,
             progress_callback=progress_callback,
@@ -218,17 +247,16 @@ async def download_and_merge(link, folder_index, video_index, chat_id, reply_to)
         )
         if os.path.exists(thumbnail_path):
             os.remove(thumbnail_path)
-            logger.debug(f"Deleted thumbnail: {thumbnail_path}")
 
         await progress_message.delete()
 
         logger.info(f"Lecture {video_index} uploaded successfully.")
 
+        # Clean up
         os.remove(list_path)
         for file in downloaded_files:
             try:
                 os.remove(os.path.join(output_dir, file))
-                logger.debug(f"Deleted part: {file}")
             except Exception as e:
                 logger.warning(f"Error deleting {file}: {e}")
         os.remove(output_video)
@@ -237,6 +265,7 @@ async def download_and_merge(link, folder_index, video_index, chat_id, reply_to)
     except subprocess.CalledProcessError:
         await progress_message.edit(f"Lecture {video_index}\nMerging failed ❌")
         logger.error(f"FFmpeg merging failed for Lecture {video_index}")
+
 
 @client.on(events.NewMessage(pattern=r'^\.iit\s+(.+)', outgoing=True))
 async def handle_iit_command(event):
