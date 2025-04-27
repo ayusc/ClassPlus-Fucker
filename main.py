@@ -6,7 +6,7 @@ import re
 from urllib.parse import urlparse
 
 # Constants
-BASE_DIR = "/sdcard/IITJAM"
+BASE_DIR = "IITJAM"
 MAX_LINKS = 5
 MAX_PARTS = 10000
 START_PART = 0
