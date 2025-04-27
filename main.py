@@ -127,7 +127,7 @@ async def download_and_merge(link, folder_index, video_index, event):
 
             part_failures += 1
             if part_failures < 3:
-                await asyncio.sleep(1)  # Wait before retrying
+                #await asyncio.sleep(1)  # Wait before retrying
 
         if part_failures == 3:
             misses += 1
@@ -243,7 +243,7 @@ async def handle_iit_command(event):
         valid_links.append(link)
 
     clear_base_dir()
-    await event.reply(f"Processing {len(valid_links)} links...")
+    #await event.reply(f"Processing {len(valid_links)} links...")
 
     for idx, link in enumerate(valid_links):
         video_index = start_index + idx
