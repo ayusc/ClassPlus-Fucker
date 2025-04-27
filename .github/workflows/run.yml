@@ -4,7 +4,7 @@ on:
   workflow_dispatch
   
 jobs:
-  process-lectures:
+  run-userbot:
     runs-on: ubuntu-latest
 
     steps:
