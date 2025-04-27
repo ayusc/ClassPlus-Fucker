@@ -4,22 +4,14 @@ import subprocess
 import requests
 from urllib.parse import urlparse
 from telegram import Update, Bot
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 
 # Configuration
 MAX_LINKS = 5
 BASE_DIR = "IITJAM"
 MAX_PARTS = 10000
 START_PART = 0
-STOP_AFTER_MISSES = 3 
-
-
-try:
-    my_var = os.environ['BOT_TOKEN'] 
-    print(f'MY_VARIABLE is: {my_var}')
-except KeyError:
-    raise EnvironmentError('Required environment variable MY_VARIABLE is missing!')
-
+STOP_AFTER_MISSES = 3
 
 # Ensure BASE_DIR exists
 os.makedirs(BASE_DIR, exist_ok=True)
@@ -43,11 +35,11 @@ def extract_details(ts_url):
     else:
         return None, None, None
 
-def download_and_merge(link, folder_index, video_index, update: Update, context: CallbackContext):
+async def download_and_merge(link, folder_index, video_index, update: Update, context: CallbackContext):
     prefix, base_path, parsed_url = extract_details(link)
     if prefix is None:
-        context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text=f"Invalid URL format: {link}")
+        await context.bot.send_message(chat_id=update.effective_chat.id,
+                                       text=f"Invalid URL format: {link}")
         return
 
     output_dir = os.path.join(BASE_DIR, str(folder_index))
@@ -57,8 +49,8 @@ def download_and_merge(link, folder_index, video_index, update: Update, context:
     downloaded_files = []
 
     # Send initial message
-    progress_message = context.bot.send_message(chat_id=update.effective_chat.id,
-                                                text=f"Lecture {video_index}\nDownloading parts... [0%]")
+    progress_message = await context.bot.send_message(chat_id=update.effective_chat.id,
+                                                      text=f"Lecture {video_index}\nDownloading parts... [0%]")
 
     misses = 0
     for i in range(START_PART, MAX_PARTS):
@@ -78,9 +70,9 @@ def download_and_merge(link, folder_index, video_index, update: Update, context:
                 misses = 0
                 # Update progress
                 progress = int((len(downloaded_files) / MAX_PARTS) * 100)
-                context.bot.edit_message_text(chat_id=update.effective_chat.id,
-                                              message_id=progress_message.message_id,
-                                              text=f"Lecture {video_index}\nDownloading parts... [{progress}%]")
+                await context.bot.edit_message_text(chat_id=update.effective_chat.id,
+                                                    message_id=progress_message.message_id,
+                                                    text=f"Lecture {video_index}\nDownloading parts... [{progress}%]")
             else:
                 misses += 1
                 if misses >= STOP_AFTER_MISSES:
@@ -99,9 +91,9 @@ def download_and_merge(link, folder_index, video_index, update: Update, context:
         output_video = os.path.join(output_dir, f"Lecture{video_index}.mp4")
         try:
             # Update progress to merging
-            context.bot.edit_message_text(chat_id=update.effective_chat.id,
-                                          message_id=progress_message.message_id,
-                                          text=f"Lecture {video_index}\nMerging parts... [0%]")
+            await context.bot.edit_message_text(chat_id=update.effective_chat.id,
+                                                message_id=progress_message.message_id,
+                                                text=f"Lecture {video_index}\nMerging parts... [0%]")
 
             subprocess.run([
                 "ffmpeg", "-f", "concat", "-safe", "0",
@@ -109,15 +101,15 @@ def download_and_merge(link, folder_index, video_index, update: Update, context:
             ], cwd=output_dir, check=True)
 
             # Update progress to uploading
-            context.bot.edit_message_text(chat_id=update.effective_chat.id,
-                                          message_id=progress_message.message_id,
-                                          text=f"Lecture {video_index}\nUploading to Telegram... [0%]")
+            await context.bot.edit_message_text(chat_id=update.effective_chat.id,
+                                                message_id=progress_message.message_id,
+                                                text=f"Lecture {video_index}\nUploading to Telegram... [0%]")
 
             # Send video with progress
             with open(output_video, 'rb') as video_file:
-                context.bot.send_document(chat_id=update.effective_chat.id,
-                                          document=video_file,
-                                          filename=os.path.basename(output_video))
+                await context.bot.send_document(chat_id=update.effective_chat.id,
+                                                 document=video_file,
+                                                 filename=os.path.basename(output_video))
 
             # Cleanup
             os.remove(list_path)
@@ -126,52 +118,49 @@ def download_and_merge(link, folder_index, video_index, update: Update, context:
             os.remove(output_video)
 
             # Final message
-            context.bot.edit_message_text(chat_id=update.effective_chat.id,
-                                          message_id=progress_message.message_id,
-                                          text=f"Lecture {video_index} processing completed successfully.")
+            await context.bot.edit_message_text(chat_id=update.effective_chat.id,
+                                                message_id=progress_message.message_id,
+                                                text=f"Lecture {video_index} processing completed successfully.")
         except subprocess.CalledProcessError:
-            context.bot.edit_message_text(chat_id=update.effective_chat.id,
-                                          message_id=progress_message.message_id,
-                                          text=f"Lecture {video_index} merging failed using ffmpeg.")
+            await context.bot.edit_message_text(chat_id=update.effective_chat.id,
+                                                message_id=progress_message.message_id,
+                                                text=f"Lecture {video_index} merging failed using ffmpeg.")
     else:
-        context.bot.edit_message_text(chat_id=update.effective_chat.id,
-                                      message_id=progress_message.message_id,
-                                      text=f"Lecture {video_index} has no parts downloaded to merge.")
+        await context.bot.edit_message_text(chat_id=update.effective_chat.id,
+                                            message_id=progress_message.message_id,
+                                            text=f"Lecture {video_index} has no parts downloaded to merge.")
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("Bot is alive and ready to process your video links!")
+async def start(update: Update, context: CallbackContext):
+    await update.message.reply_text("Bot is alive and ready to process your video links!")
 
-def handle_links(update: Update, context: CallbackContext):
+async def handle_links(update: Update, context: CallbackContext):
     user_input = update.message.text.strip()
     links = user_input.split()
     if len(links) > MAX_LINKS:
-        update.message.reply_text(f"Please provide up to {MAX_LINKS} links.")
+        await update.message.reply_text(f"Please provide up to {MAX_LINKS} links.")
         return
 
     valid_links = []
     for link in links:
         prefix, base_path, parsed_url = extract_details(link)
         if prefix is None:
-            update.message.reply_text(f"The specified URL is not in the correct format: {link}")
+            await update.message.reply_text(f"The specified URL is not in the correct format: {link}")
             return
         valid_links.append(link)
 
-    update.message.reply_text("Processing your links. This may take a while...")
+    await update.message.reply_text("Processing your links. This may take a while...")
 
     for idx, link in enumerate(valid_links, 1):
         video_index = idx
-        download_and_merge(link, idx, video_index, update, context)
+        await download_and_merge(link, idx, video_index, update, context)
 
 def main():
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_links))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_links))
 
-    updater.start_polling()
-    updater.idle()
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
-
