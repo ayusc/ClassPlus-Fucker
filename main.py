@@ -126,7 +126,7 @@ async def download_part(session, url, save_path, semaphore):
             return False
 
 # Modify your download_and_merge
-async def download_and_merge(link, folder_index, video_index, event, topic_id):
+async def download_and_merge(link, folder_index, video_index, event):
     logger.info(f"Processing video {video_index} for link: {link}")
     topic_id = None 
 
