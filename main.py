@@ -121,7 +121,7 @@ async def download_and_merge(link, folder_index, video_index, event):
             except Exception as e:
                 logger.warning(f"Attempt {attempt+1}: Error downloading {part_name}: {e}")
             
-            await asyncio.sleep(1)  # Wait 1 second between retries
+            #await asyncio.sleep(1)  # Wait 1 second between retries
         
         if not success:
             logger.error(f"Failed to download {part_name} after 3 attempts.")
