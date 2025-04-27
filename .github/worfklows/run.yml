@@ -28,7 +28,7 @@ jobs:
 
       - name: Run lecture processing script
         run: |
-          python process_lectures.py
+          python main.py
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
 
