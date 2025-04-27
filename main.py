@@ -89,7 +89,7 @@ async def download_and_merge(link, folder_index, video_index, event):
     query = parsed_url.query
 
     downloaded_files = []
-    progress_message = await event.reply(f"Lecture {video_index}\nStarting download...")
+    progress_message = await event.reply(f"Lecture {video_index}\nDownloading parts...")
 
     misses = 0
     for i in range(START_PART, MAX_PARTS):
@@ -178,9 +178,8 @@ async def download_and_merge(link, folder_index, video_index, event):
             ]
         )
 
-        await progress_message.edit(f"Lecture {video_index}\nCompleted ✅")
-        logger.info(f"Lecture {video_index} uploaded successfully.")
-
+        await progress_message.delete()
+        
         # Clean up
         for file in downloaded_files:
             try:
@@ -199,6 +198,7 @@ async def download_and_merge(link, folder_index, video_index, event):
 @client.on(events.NewMessage(pattern=r'^\.iit\s+(.+)', outgoing=True))
 async def handle_iit_command(event):
     logger.info("Received .iit command.")
+    await event.delete()
     user_input = event.pattern_match.group(1)
     parts = user_input.split()
 
@@ -226,7 +226,7 @@ async def handle_iit_command(event):
         valid_links.append(link)
 
     clear_base_dir()
-    await event.reply(f"Processing {len(valid_links)} links...")
+    #await event.reply(f"Processing {len(valid_links)} links...")
 
     for idx, link in enumerate(valid_links):
         video_index = start_index + idx
