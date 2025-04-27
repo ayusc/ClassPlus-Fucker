@@ -105,10 +105,14 @@ def create_thumbnail(video_path, thumb_path):
 
 async def download_and_merge(link, folder_index, video_index, event):
     logger.info(f"Processing video {video_index} for link: {link}")
+    topic_id = None 
 
+    if getattr(event.reply_to, 'forum_topic', None):
+      topic_id = top if (top := event.reply_to.reply_to_top_id) \
+    else event.reply_to_msg_id 
     prefix, base_path, parsed_url = extract_details(link)
     if prefix is None:
-        await event.reply(f"Invalid URL format: {link}")
+        await client.send_message(event.chat_id, (f"Invalid URL format: {link}", reply_to=topic_id)
         logger.error(f"Invalid URL format: {link}")
         return
 
@@ -118,12 +122,6 @@ async def download_and_merge(link, folder_index, video_index, event):
 
     downloaded_files = []
     #progress_message = await event.reply(f"Lecture {video_index}\nDownloading...")
-
-    topic_id = None 
-
-    if getattr(event.reply_to, 'forum_topic', None):
-      topic_id = top if (top := event.reply_to.reply_to_top_id) \
-    else event.reply_to_msg_id 
 
     progress_message = await client.send_message(event.chat_id, f"Lecture {video_index}\nDownloading...", reply_to=topic_id)
 
