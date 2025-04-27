@@ -2,3 +2,4 @@ requests
 telethon
 python-dotenv
 ffmpeg-python
+aiohttp
