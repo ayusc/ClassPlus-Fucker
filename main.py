@@ -88,7 +88,8 @@ async def download_and_merge(link, folder_index, video_index, event):
         local_path = os.path.join(output_dir, part_name)
 
         if os.path.exists(local_path):
-            continue  # Skip if already exists (shouldn't happen, but safe)
+            logger.debug(f"Skipping existing part: {part_name}")
+            continue
 
         try:
             res = requests.get(full_url, stream=True, timeout=10)
@@ -97,15 +98,19 @@ async def download_and_merge(link, folder_index, video_index, event):
                     for chunk in res.iter_content(chunk_size=1024):
                         f.write(chunk)
                 downloaded_files.append(part_name)
+                logger.info(f"Downloaded part: {part_name}")
                 misses = 0
             else:
+                logger.warning(f"Part not found: {part_name} (HTTP {res.status_code})")
                 misses += 1
                 if misses >= STOP_AFTER_MISSES:
+                    logger.warning(f"Stopping download after {STOP_AFTER_MISSES} consecutive misses.")
                     break
         except Exception as e:
             logger.error(f"Error downloading {part_name}: {e}")
             misses += 1
             if misses >= STOP_AFTER_MISSES:
+                logger.error(f"Stopping after {STOP_AFTER_MISSES} consecutive errors.")
                 break
 
     if not downloaded_files:
@@ -122,12 +127,17 @@ async def download_and_merge(link, folder_index, video_index, event):
 
     try:
         await progress_message.edit(f"Lecture {video_index}\nMerging video...")
+        logger.info(f"Started merging parts into {output_video}...")
+
         subprocess.run([
             "ffmpeg", "-f", "concat", "-safe", "0",
             "-i", "file_list.txt", "-c", "copy", f"Lecture{video_index}.mp4"
         ], cwd=output_dir, check=True)
 
+        logger.info(f"Merging completed for {output_video}.")
+
         await progress_message.edit(f"Lecture {video_index}\nUploading... 0%")
+        logger.info(f"Started uploading {output_video} to Telegram...")
 
         file_size = os.path.getsize(output_video)
         last_progress = -5
@@ -137,10 +147,11 @@ async def download_and_merge(link, folder_index, video_index, event):
             percent = int(current / total * 100)
             if percent >= last_progress + 5:
                 last_progress = percent
+                logger.info(f"Uploading {output_video}: {percent}% done.")
                 try:
                     await progress_message.edit(f"Lecture {video_index}\nUploading... {percent}%")
                 except:
-                    pass  # Ignore if message edit fails due to flood
+                    pass  # Ignore FloodWait
 
         await client.send_file(
             event.chat_id,
@@ -150,20 +161,23 @@ async def download_and_merge(link, folder_index, video_index, event):
         )
 
         await progress_message.edit(f"Lecture {video_index}\nCompleted ✅")
-        logger.info(f"Lecture {video_index} completed.")
+        logger.info(f"Lecture {video_index} uploaded successfully.")
 
         # Clean up
         os.remove(list_path)
         for file in downloaded_files:
             try:
                 os.remove(os.path.join(output_dir, file))
+                logger.debug(f"Deleted part: {file}")
             except Exception as e:
                 logger.warning(f"Error deleting {file}: {e}")
         os.remove(output_video)
+        logger.info(f"Cleaned up files for Lecture {video_index}.")
 
     except subprocess.CalledProcessError:
         await progress_message.edit(f"Lecture {video_index}\nMerging failed ❌")
         logger.error(f"FFmpeg merging failed for Lecture {video_index}")
+
 
 @client.on(events.NewMessage(pattern=r'^\.iit\s+(.+)', outgoing=True))
 async def handle_iit_command(event):
