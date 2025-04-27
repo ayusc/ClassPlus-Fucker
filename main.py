@@ -50,7 +50,7 @@ async def download_and_merge(link, folder_index, video_index, update: Update, co
 
     # Send initial message
     progress_message = await context.bot.send_message(chat_id=update.effective_chat.id,
-                                                      text=f"Lecture {video_index}\nDownloading parts... [0%]")
+                                                      text=f"Lecture {video_index}\nDownloading parts...")
 
     misses = 0
     for i in range(START_PART, MAX_PARTS):
@@ -68,11 +68,6 @@ async def download_and_merge(link, folder_index, video_index, update: Update, co
                         f.write(chunk)
                 downloaded_files.append(part_name)
                 misses = 0
-                # Update progress
-                progress = int((len(downloaded_files) / MAX_PARTS) * 100)
-                await context.bot.edit_message_text(chat_id=update.effective_chat.id,
-                                                    message_id=progress_message.message_id,
-                                                    text=f"Lecture {video_index}\nDownloading parts... [{progress}%]")
             else:
                 misses += 1
                 if misses >= STOP_AFTER_MISSES:
@@ -93,7 +88,7 @@ async def download_and_merge(link, folder_index, video_index, update: Update, co
             # Update progress to merging
             await context.bot.edit_message_text(chat_id=update.effective_chat.id,
                                                 message_id=progress_message.message_id,
-                                                text=f"Lecture {video_index}\nMerging parts... [0%]")
+                                                text=f"Lecture {video_index}\nMerging parts...")
 
             subprocess.run([
                 "ffmpeg", "-f", "concat", "-safe", "0",
@@ -103,7 +98,7 @@ async def download_and_merge(link, folder_index, video_index, update: Update, co
             # Update progress to uploading
             await context.bot.edit_message_text(chat_id=update.effective_chat.id,
                                                 message_id=progress_message.message_id,
-                                                text=f"Lecture {video_index}\nUploading to Telegram... [0%]")
+                                                text=f"Lecture {video_index}\nUploading to Telegram...")
 
             # Send video with progress
             with open(output_video, 'rb') as video_file:
@@ -129,6 +124,7 @@ async def download_and_merge(link, folder_index, video_index, update: Update, co
         await context.bot.edit_message_text(chat_id=update.effective_chat.id,
                                             message_id=progress_message.message_id,
                                             text=f"Lecture {video_index} has no parts downloaded to merge.")
+
 
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text("Bot is alive and ready to process your video links!")
