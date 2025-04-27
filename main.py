@@ -125,7 +125,7 @@ async def download_and_merge(link, folder_index, video_index, event):
       topic_id = top if (top := event.reply_to.reply_to_top_id) \
     else event.reply_to_msg_id 
 
-    progress_message = await client.send_message(event.chat_id, f"Lecture {video_index}\nDownloading...")
+    progress_message = await client.send_message(event.chat_id, f"Lecture {video_index}\nDownloading...", reply_to=topic_id)
 
     misses = 0
     for i in range(START_PART, MAX_PARTS):
