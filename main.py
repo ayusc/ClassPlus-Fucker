@@ -23,57 +23,57 @@ STOP_AFTER_MISSES = 3
 
 # Setup logging
 logging.basicConfig(
-    format='[%(asctime)s] %(levelname)s - %(message)s',
-    level=logging.INFO
+    format='[%(asctime)s] %(levelname)s - %(message)s',
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
 # Initialize Telethon client
 if SESSION_STRING:
-    logger.info("Using provided session string to login.")
-    client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
+    logger.info("Using provided session string to login.")
+    client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 else:
-    logger.error("SESSION_STRING is missing. Please set it in environment variables.")
-    raise ValueError("SESSION_STRING environment variable not found!")
+    logger.error("SESSION_STRING is missing. Please set it in environment variables.")
+    raise ValueError("SESSION_STRING environment variable not found!")
 
 # Ensure BASE_DIR exists
 os.makedirs(BASE_DIR, exist_ok=True)
 
 def clear_base_dir():
-    if os.path.exists(BASE_DIR):
-        logger.info(f"Clearing contents of {BASE_DIR}...")
-        shutil.rmtree(BASE_DIR)
-    os.makedirs(BASE_DIR, exist_ok=True)
-    logger.info(f"Recreated {BASE_DIR} directory after clearing.")
+    if os.path.exists(BASE_DIR):
+        logger.info(f"Clearing contents of {BASE_DIR}...")
+        shutil.rmtree(BASE_DIR)
+    os.makedirs(BASE_DIR, exist_ok=True)
+    logger.info(f"Recreated {BASE_DIR} directory after clearing.")
 
 def extract_details(ts_url):
-    parsed_url = urlparse(ts_url)
-    path_parts = parsed_url.path.rsplit('/', 1)
-    filename = path_parts[-1]
+    parsed_url = urlparse(ts_url)
+    path_parts = parsed_url.path.rsplit('/', 1)
+    filename = path_parts[-1]
 
-    match1 = re.match(r"(720p)_\d+\.ts", filename)
-    match2 = re.match(r"(data)\d+\.ts", filename)
+    match1 = re.match(r"(720p)_\d+\.ts", filename)
+    match2 = re.match(r"(data)\d+\.ts", filename)
 
-    if match1:
-        prefix = match1.group(1) + "_"
-        base_path = path_parts[0]
-        return prefix, base_path, parsed_url
-    elif match2:
-        prefix = match2.group(1)
-        base_path = path_parts[0]
-        return prefix, base_path, parsed_url
-    else:
-        return None, None, None
+    if match1:
+        prefix = match1.group(1) + "_"
+        base_path = path_parts[0]
+        return prefix, base_path, parsed_url
+    elif match2:
+        prefix = match2.group(1)
+        base_path = path_parts[0]
+        return prefix, base_path, parsed_url
+    else:
+        return None, None, None
 
 def get_video_metadata(video_path):
-    probe = ffmpeg.probe(video_path)
-    video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
-    if video_stream is None:
-        raise Exception('No video stream found')
-    width = int(video_stream['width'])
-    height = int(video_stream['height'])
-    duration = float(video_stream['duration'])
-    return width, height, duration
+    probe = ffmpeg.probe(video_path)
+    video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
+    if video_stream is None:
+        raise Exception('No video stream found')
+    width = int(video_stream['width'])
+    height = int(video_stream['height'])
+    duration = float(video_stream['duration'])
+    return width, height, duration
 
 import os
 import subprocess
@@ -215,49 +215,49 @@ async def download_and_merge(link, folder_index, video_index, event):
 @client.on(events.NewMessage(pattern=r'^\.iit\s+(.+)', outgoing=True))
 async def handle_iit_command(event):
     await event.delete()
-    logger.info("Received .iit command.")
-    user_input = event.pattern_match.group(1)
-    parts = user_input.split()
+    logger.info("Received .iit command.")
+    user_input = event.pattern_match.group(1)
+    parts = user_input.split()
 
-    if len(parts) < 2:
-        await event.reply("❌ Usage: `.iit <start_no> <link1> <link2> ...`\n(up to 5 links allowed)")
-        return
+    if len(parts) < 2:
+        await event.reply("❌ Usage: `.iit <start_no> <link1> <link2> ...`\n(up to 5 links allowed)")
+        return
 
-    try:
-        start_index = int(parts[0])
-    except ValueError:
-        await event.reply("❌ Start number must be an integer.\nUsage: `.iit <start_no> <link1> <link2> ...`")
-        return
+    try:
+        start_index = int(parts[0])
+    except ValueError:
+        await event.reply("❌ Start number must be an integer.\nUsage: `.iit <start_no> <link1> <link2> ...`")
+        return
 
-    links = parts[1:]
-    if len(links) > MAX_LINKS:
-        await event.reply(f"❌ You can provide up to {MAX_LINKS} links only.")
-        return
+    links = parts[1:]
+    if len(links) > MAX_LINKS:
+        await event.reply(f"❌ You can provide up to {MAX_LINKS} links only.")
+        return
 
-    valid_links = []
-    for link in links:
-        prefix, base_path, parsed_url = extract_details(link)
-        if prefix is None:
-            await event.reply(f"❌ Invalid URL format: {link}")
-            return
-        valid_links.append(link)
+    valid_links = []
+    for link in links:
+        prefix, base_path, parsed_url = extract_details(link)
+        if prefix is None:
+            await event.reply(f"❌ Invalid URL format: {link}")
+            return
+        valid_links.append(link)
 
-    clear_base_dir()
-    await event.reply(f"Processing {len(valid_links)} links...")
+    clear_base_dir()
+    await event.reply(f"Processing {len(valid_links)} links...")
 
-    for idx, link in enumerate(valid_links):
-        video_index = start_index + idx
-        await download_and_merge(link, idx + 1, video_index, event)
+    for idx, link in enumerate(valid_links):
+        video_index = start_index + idx
+        await download_and_merge(link, idx + 1, video_index, event)
 
 @client.on(events.NewMessage(pattern=r'^\.ping$', outgoing=True))
 async def ping(event):
-    logger.info("Received .ping command.")
-    await event.reply("✅ Userbot is alive and running!")
+    logger.info("Received .ping command.")
+    await event.reply("✅ Userbot is alive and running!")
 
 def main():
-    client.start()
-    logger.info("Userbot started successfully.")
-    client.run_until_disconnected()
+    client.start()
+    logger.info("Userbot started successfully.")
+    client.run_until_disconnected()
 
 if __name__ == "__main__":
-    main()
+    main()
