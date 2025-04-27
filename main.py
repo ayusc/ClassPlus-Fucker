@@ -9,7 +9,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 
 # Configuration
 MAX_LINKS = 5
-BASE_DIR = "IITJAM"
+BASE_DIR = "CLASSPLUS"
 MAX_PARTS = 10000
 START_PART = 0
 STOP_AFTER_MISSES = 3
