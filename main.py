@@ -6,11 +6,12 @@ import subprocess
 import requests
 from urllib.parse import urlparse
 from telethon import TelegramClient, events
+from telethon.sessions import StringSession
 
 # Configuration
 API_ID = int(os.getenv("API_ID"))         # your Telegram API ID
 API_HASH = os.getenv("API_HASH")           # your Telegram API Hash
-SESSION_NAME = "userbot"                   # Session name for your userbot
+SESSION_STRING = os.getenv("SESSION_STRING")  # Session string stored in env
 BASE_DIR = "CLASSPLUS"
 MAX_LINKS = 5
 MAX_PARTS = 10000
@@ -24,8 +25,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize Telethon client
-client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+# Initialize Telethon client using StringSession
+if SESSION_STRING:
+    logger.info("Using provided session string to login.")
+    client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
+else:
+    logger.error("SESSION_STRING is missing. Please set it in environment variables.")
+    raise ValueError("SESSION_STRING environment variable not found!")
 
 # Ensure BASE_DIR exists
 os.makedirs(BASE_DIR, exist_ok=True)
