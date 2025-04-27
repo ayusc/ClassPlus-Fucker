@@ -75,135 +75,146 @@ def get_video_metadata(video_path):
     duration = float(video_stream['duration'])
     return width, height, duration
 
+import os
+import subprocess
+import requests
+import asyncio
+
 async def download_and_merge(link, folder_index, video_index, event):
-    logger.info(f"Processing video {video_index} for link: {link}")
+    logger.info(f"Processing video {video_index} for link: {link}")
 
-    prefix, base_path, parsed_url = extract_details(link)
-    if prefix is None:
-        await event.reply(f"Invalid URL format: {link}")
-        logger.error(f"Invalid URL format: {link}")
-        return
+    prefix, base_path, parsed_url = extract_details(link)
+    if prefix is None:
+        await event.reply(f"Invalid URL format: {link}")
+        logger.error(f"Invalid URL format: {link}")
+        return
 
-    output_dir = os.path.join(BASE_DIR, str(folder_index))
-    os.makedirs(output_dir, exist_ok=True)
-    query = parsed_url.query
+    output_dir = os.path.join(BASE_DIR, str(folder_index))
+    os.makedirs(output_dir, exist_ok=True)
+    query = parsed_url.query
 
-    downloaded_files = []
-    progress_message = await event.reply(f"Lecture {video_index}\nStarting download...")
+    downloaded_files = []
+    progress_message = await event.reply(f"Lecture {video_index}\nDownloading...")
 
-    misses = 0
-    for i in range(START_PART, MAX_PARTS):
-        part_name = f"{prefix}{i:03d}.ts"
-        full_url = f"{parsed_url.scheme}://{parsed_url.netloc}{base_path}/{part_name}"
-        if query:
-            full_url += f"?{query}"
+    misses = 0
+    for i in range(START_PART, MAX_PARTS):
+        part_name = f"{prefix}{i:03d}.ts"
+        full_url = f"{parsed_url.scheme}://{parsed_url.netloc}{base_path}/{part_name}"
+        if query:
+            full_url += f"?{query}"
 
-        local_path = os.path.join(output_dir, part_name)
+        local_path = os.path.join(output_dir, part_name)
 
-        if os.path.exists(local_path):
-            logger.debug(f"Skipping existing part: {part_name}")
-            continue
+        if os.path.exists(local_path):
+            logger.debug(f"Skipping existing part: {part_name}")
+            continue
 
-        try:
-            res = requests.get(full_url, stream=True, timeout=10)
-            if res.status_code == 200:
-                with open(local_path, 'wb') as f:
-                    for chunk in res.iter_content(chunk_size=1024):
-                        f.write(chunk)
-                downloaded_files.append(part_name)
-                logger.info(f"Downloaded part: {part_name}")
-                misses = 0
-            else:
-                logger.warning(f"Part not found: {part_name} (HTTP {res.status_code})")
-                misses += 1
-                if misses >= STOP_AFTER_MISSES:
-                    logger.warning(f"Stopping download after {STOP_AFTER_MISSES} consecutive misses.")
-                    break
-        except Exception as e:
-            logger.error(f"Error downloading {part_name}: {e}")
-            misses += 1
-            if misses >= STOP_AFTER_MISSES:
-                logger.error(f"Stopping after {STOP_AFTER_MISSES} consecutive errors.")
-                break
+        part_failures = 0
+        while part_failures < 3:  # Retry up to 3 times for the same part
+            try:
+                res = requests.get(full_url, stream=True, timeout=10)
+                if res.status_code == 200:
+                    with open(local_path, 'wb') as f:
+                        for chunk in res.iter_content(chunk_size=1024):
+                            f.write(chunk)
+                    downloaded_files.append(part_name)
+                    logger.info(f"Downloaded part: {part_name}")
+                    break  # Exit the retry loop on successful download
+                else:
+                    logger.warning(f"Part not found: {part_name} (HTTP {res.status_code})")
+            except Exception as e:
+                logger.error(f"Error downloading {part_name}: {e}")
 
-    if not downloaded_files:
-        await progress_message.edit(f"Lecture {video_index}\nNo parts downloaded!")
-        logger.warning(f"No parts downloaded for Lecture {video_index}.")
-        return
+            part_failures += 1
+            if part_failures < 3:
+                await asyncio.sleep(1)  # Wait before retrying
 
-    list_path = os.path.join(output_dir, "file_list.txt")
-    with open(list_path, 'w') as f:
-        for name in downloaded_files:
-            f.write(f"file '{name}'\n")
+        if part_failures == 3:
+            misses += 1
+            logger.warning(f"Part {part_name} failed 3 times. Total misses: {misses}")
 
-    output_video = os.path.join(output_dir, f"Lecture{video_index}.mp4")
+        if misses >= STOP_AFTER_MISSES:
+            logger.warning(f"Stopping download after {STOP_AFTER_MISSES} consecutive misses.")
+            break
 
-    try:
-        await progress_message.edit(f"Lecture {video_index}\nMerging video...")
-        logger.info(f"Started merging parts into {output_video}...")
+    if not downloaded_files:
+        await progress_message.edit(f"Lecture {video_index}\nNo parts downloaded!")
+        logger.warning(f"No parts downloaded for Lecture {video_index}.")
+        return
 
-        subprocess.run([
-            "ffmpeg", "-f", "concat", "-safe", "0",
-            "-i", "file_list.txt", "-c", "copy", f"Lecture{video_index}.mp4"
-        ], cwd=output_dir, check=True)
+    list_path = os.path.join(output_dir, "file_list.txt")
+    with open(list_path, 'w') as f:
+        for name in downloaded_files:
+            f.write(f"file '{name}'\n")
 
-        logger.info(f"Merging completed for {output_video}.")
+    output_video = os.path.join(output_dir, f"Lecture{video_index}.mp4")
 
-        await progress_message.edit(f"Lecture {video_index}\nUploading... 0%")
-        logger.info(f"Started uploading {output_video} to Telegram...")
+    try:
+        await progress_message.edit(f"Lecture {video_index}\nMerging video...")
+        logger.info(f"Started merging parts into {output_video}...")
 
-        file_size = os.path.getsize(output_video)
-        last_progress = -5
+        subprocess.run([
+            "ffmpeg", "-f", "concat", "-safe", "0",
+            "-i", "file_list.txt", "-c", "copy", f"Lecture{video_index}.mp4"
+        ], cwd=output_dir, check=True)
 
-        async def progress_callback(current, total):
-            nonlocal last_progress
-            percent = int(current / total * 100)
-            if percent >= last_progress + 5:
-                last_progress = percent
-                logger.info(f"Uploading {output_video}: {percent}% done.")
-                try:
-                    await progress_message.edit(f"Lecture {video_index}\nUploading... {percent}%")
-                except:
-                    pass  # Ignore FloodWait
+        logger.info(f"Merging completed for {output_video}.")
 
-        width, height, duration = get_video_metadata(output_video)
+        await progress_message.edit(f"Lecture {video_index}\nUploading... 0%")
+        logger.info(f"Started uploading {output_video} to Telegram...")
 
-        await client.send_file(
-        event.chat_id,
-        output_video,
-        caption=f"Lecture {video_index}",
-        progress_callback=progress_callback,
-        attributes=[
-            DocumentAttributeVideo(
-                duration=int(duration),
-                w=width,
-                h=height,
-                supports_streaming=True  # Important for videos
-            )
-        ]
-        )
-        
-        await progress_message.edit(f"Lecture {video_index}\nCompleted ✅")
-        logger.info(f"Lecture {video_index} uploaded successfully.")
+        file_size = os.path.getsize(output_video)
+        last_progress = -5
 
-        # Clean up
-        os.remove(list_path)
-        for file in downloaded_files:
-            try:
-                os.remove(os.path.join(output_dir, file))
-                logger.debug(f"Deleted part: {file}")
-            except Exception as e:
-                logger.warning(f"Error deleting {file}: {e}")
-        os.remove(output_video)
-        logger.info(f"Cleaned up files for Lecture {video_index}.")
+        async def progress_callback(current, total):
+            nonlocal last_progress
+            percent = int(current / total * 100)
+            if percent >= last_progress + 5:
+                last_progress = percent
+                logger.info(f"Uploading {output_video}: {percent}% done.")
+                try:
+                    await progress_message.edit(f"Lecture {video_index}\nUploading... {percent}%")
+                except:
+                    pass  # Ignore FloodWait
 
-    except subprocess.CalledProcessError:
-        await progress_message.edit(f"Lecture {video_index}\nMerging failed ❌")
-        logger.error(f"FFmpeg merging failed for Lecture {video_index}")
+        width, height, duration = get_video_metadata(output_video)
 
+        await client.send_file(
+            event.chat_id,
+            output_video,
+            caption=f"Lecture {video_index}",
+            progress_callback=progress_callback,
+            attributes=[
+                DocumentAttributeVideo(
+                    duration=int(duration),
+                    w=width,
+                    h=height,
+                    supports_streaming=True  # Important for videos
+                )
+            ]
+        )
+        
+        await progress_message.delete()
+        logger.info(f"Lecture {video_index} uploaded successfully.")
+
+        # Clean up
+        os.remove(list_path)
+        for file in downloaded_files:
+            try:
+                os.remove(os.path.join(output_dir, file))
+                logger.debug(f"Deleted part: {file}")
+            except Exception as e:
+                logger.warning(f"Error deleting {file}: {e}")
+        os.remove(output_video)
+        logger.info(f"Cleaned up files for Lecture {video_index}.")
+
+    except subprocess.CalledProcessError:
+        await progress_message.edit(f"Lecture {video_index}\nMerging failed ❌")
+        logger.error(f"FFmpeg merging failed for Lecture {video_index}")
 
 @client.on(events.NewMessage(pattern=r'^\.iit\s+(.+)', outgoing=True))
 async def handle_iit_command(event):
+    await event.delete()
     logger.info("Received .iit command.")
     user_input = event.pattern_match.group(1)
     parts = user_input.split()
