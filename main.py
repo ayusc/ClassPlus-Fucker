@@ -90,7 +90,7 @@ async def download_and_merge(link, folder_index, video_index, event):
 
     downloaded_files = []
     progress_message = await event.reply(f"Lecture {video_index}\nDownloading parts...")
-
+    
     misses = 0
     for i in range(START_PART, MAX_PARTS):
         part_name = f"{prefix}{i:03d}.ts"
@@ -104,26 +104,30 @@ async def download_and_merge(link, folder_index, video_index, event):
             logger.debug(f"Skipping existing part: {part_name}")
             continue
 
-        try:
-            res = requests.get(full_url, stream=True, timeout=10)
-            if res.status_code == 200:
-                with open(local_path, 'wb') as f:
-                    for chunk in res.iter_content(chunk_size=1024):
-                        f.write(chunk)
-                downloaded_files.append(local_path)
-                logger.info(f"Downloaded part: {part_name}")
-                misses = 0
-            else:
-                logger.warning(f"Part not found: {part_name} (HTTP {res.status_code})")
-                misses += 1
-                if misses >= STOP_AFTER_MISSES:
-                    logger.warning(f"Stopping download after {STOP_AFTER_MISSES} consecutive misses.")
-                    break
-        except Exception as e:
-            logger.error(f"Error downloading {part_name}: {e}")
+        success = False
+        for attempt in range(3):  # Retry 3 times
+            try:
+                res = requests.get(full_url, stream=True, timeout=10)
+                if res.status_code == 200:
+                    with open(local_path, 'wb') as f:
+                        for chunk in res.iter_content(chunk_size=1024):
+                            f.write(chunk)
+                    downloaded_files.append(local_path)
+                    logger.info(f"Downloaded part: {part_name}")
+                    success = True
+                    break  # Download successful, break retry loop
+                else:
+                    logger.warning(f"Attempt {attempt+1}: Part not found {part_name} (HTTP {res.status_code})")
+            except Exception as e:
+                logger.warning(f"Attempt {attempt+1}: Error downloading {part_name}: {e}")
+            
+            await asyncio.sleep(1)  # Wait 1 second between retries
+        
+        if not success:
+            logger.error(f"Failed to download {part_name} after 3 attempts.")
             misses += 1
             if misses >= STOP_AFTER_MISSES:
-                logger.error(f"Stopping after {STOP_AFTER_MISSES} consecutive errors.")
+                logger.warning(f"Stopping download after {STOP_AFTER_MISSES} consecutive misses.")
                 break
 
     if not downloaded_files:
