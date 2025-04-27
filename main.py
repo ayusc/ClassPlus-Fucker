@@ -117,7 +117,15 @@ async def download_and_merge(link, folder_index, video_index, event):
     query = parsed_url.query
 
     downloaded_files = []
-    progress_message = await event.reply(f"Lecture {video_index}\nDownloading...")
+    #progress_message = await event.reply(f"Lecture {video_index}\nDownloading...")
+
+    topic_id = None 
+
+    if getattr(event.reply_to, 'forum_topic', None):
+      topic_id = top if (top := event.reply_to.reply_to_top_id) \
+    else event.reply_to_msg_id 
+
+    progress_message = await client.send_message(event.chat_id, f"Lecture {video_index}\nDownloading...")
 
     misses = 0
     for i in range(START_PART, MAX_PARTS):
@@ -204,6 +212,7 @@ async def download_and_merge(link, folder_index, video_index, event):
         await client.send_file(
             event.chat_id,
             output_video,
+            reply_to=topic_id,
             caption=f"Lecture {video_index}",
             thumb=thumbnail_path,  
             progress_callback=progress_callback,
@@ -248,7 +257,7 @@ async def handle_iit_command(event):
     
     set_processing_status(True)
     
-    #await event.delete()
+    await event.delete()
     logger.info("Received .iit command.")
     user_input = event.pattern_match.group(1)
     parts = user_input.split()
