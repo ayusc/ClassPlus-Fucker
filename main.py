@@ -110,7 +110,7 @@ async def download_and_merge(link, folder_index, video_index, event):
                 with open(local_path, 'wb') as f:
                     for chunk in res.iter_content(chunk_size=1024):
                         f.write(chunk)
-                downloaded_files.append(part_name)
+                downloaded_files.append(local_path)
                 logger.info(f"Downloaded part: {part_name}")
                 misses = 0
             else:
@@ -131,21 +131,16 @@ async def download_and_merge(link, folder_index, video_index, event):
         logger.warning(f"No parts downloaded for Lecture {video_index}.")
         return
 
-    list_path = os.path.join(output_dir, "file_list.txt")
-    with open(list_path, 'w') as f:
-        for name in downloaded_files:
-            f.write(f"file '{name}'\n")
-
     output_video = os.path.join(output_dir, f"Lecture{video_index}.mp4")
 
     try:
         await progress_message.edit(f"Lecture {video_index}\nMerging video...")
         logger.info(f"Started merging parts into {output_video}...")
 
-        subprocess.run([
-            "ffmpeg", "-f", "concat", "-safe", "0",
-            "-i", "file_list.txt", "-c", "copy", f"Lecture{video_index}.mp4"
-        ], cwd=output_dir, check=True)
+        # Use ffmpeg-python to concatenate
+        input_streams = [ffmpeg.input(file) for file in downloaded_files]
+        joined = ffmpeg.concat(*input_streams, v=1, a=1).output(output_video).overwrite_output()
+        joined.run()
 
         logger.info(f"Merging completed for {output_video}.")
 
@@ -169,37 +164,36 @@ async def download_and_merge(link, folder_index, video_index, event):
         width, height, duration = get_video_metadata(output_video)
 
         await client.send_file(
-        event.chat_id,
-        output_video,
-        caption=f"Lecture {video_index}",
-        progress_callback=progress_callback,
-        attributes=[
-            DocumentAttributeVideo(
-                duration=int(duration),
-                w=width,
-                h=height,
-                supports_streaming=True  # Important for videos
-            )
-        ]
+            event.chat_id,
+            output_video,
+            caption=f"Lecture {video_index}",
+            progress_callback=progress_callback,
+            attributes=[
+                DocumentAttributeVideo(
+                    duration=int(duration),
+                    w=width,
+                    h=height,
+                    supports_streaming=True  # Important for videos
+                )
+            ]
         )
-        
+
         await progress_message.edit(f"Lecture {video_index}\nCompleted ✅")
         logger.info(f"Lecture {video_index} uploaded successfully.")
 
         # Clean up
-        os.remove(list_path)
         for file in downloaded_files:
             try:
-                os.remove(os.path.join(output_dir, file))
+                os.remove(file)
                 logger.debug(f"Deleted part: {file}")
             except Exception as e:
                 logger.warning(f"Error deleting {file}: {e}")
         os.remove(output_video)
         logger.info(f"Cleaned up files for Lecture {video_index}.")
 
-    except subprocess.CalledProcessError:
+    except Exception as e:
         await progress_message.edit(f"Lecture {video_index}\nMerging failed ❌")
-        logger.error(f"FFmpeg merging failed for Lecture {video_index}")
+        logger.error(f"FFmpeg merging failed for Lecture {video_index}: {e}")
 
 
 @client.on(events.NewMessage(pattern=r'^\.iit\s+(.+)', outgoing=True))
