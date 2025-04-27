@@ -103,16 +103,12 @@ def create_thumbnail(video_path, thumb_path):
         logger.error(f"Failed to create thumbnail: {e}")
 
 
-async def download_and_merge(link, folder_index, video_index, event):
+async def download_and_merge(link, folder_index, video_index, chat_id, reply_to):
     logger.info(f"Processing video {video_index} for link: {link}")
-    topic_id = None 
 
-    if getattr(event.reply_to, 'forum_topic', None):
-      topic_id = top if (top := event.reply_to.reply_to_top_id) \
-    else event.reply_to_msg_id 
     prefix, base_path, parsed_url = extract_details(link)
     if prefix is None:
-        await client.send_message(event.chat_id, f"Invalid URL format: {link}", reply_to=topic_id)
+        await client.send_message(chat_id, f"Invalid URL format: {link}", reply_to=reply_to)
         logger.error(f"Invalid URL format: {link}")
         return
 
@@ -121,9 +117,7 @@ async def download_and_merge(link, folder_index, video_index, event):
     query = parsed_url.query
 
     downloaded_files = []
-    #progress_message = await event.reply(f"Lecture {video_index}\nDownloading...")
-
-    progress_message = await client.send_message(event.chat_id, f"Lecture {video_index}\nDownloading...", reply_to=topic_id)
+    progress_message = await client.send_message(chat_id, f"Lecture {video_index}\nDownloading...", reply_to=reply_to)
 
     misses = 0
     for i in range(START_PART, MAX_PARTS):
@@ -139,7 +133,7 @@ async def download_and_merge(link, folder_index, video_index, event):
             continue
 
         part_failures = 0
-        while part_failures < 3:  # Retry up to 3 times for the same part
+        while part_failures < 3:
             try:
                 res = requests.get(full_url, stream=True, timeout=10)
                 if res.status_code == 200:
@@ -148,13 +142,12 @@ async def download_and_merge(link, folder_index, video_index, event):
                             f.write(chunk)
                     downloaded_files.append(part_name)
                     logger.info(f"Downloaded part: {part_name}")
-                    break  # Exit the retry loop on successful download
+                    break
                 else:
                     logger.warning(f"Part not found: {part_name} (HTTP {res.status_code})")
             except Exception as e:
                 logger.error(f"Error downloading {part_name}: {e}")
-
-            part_failures += 1              
+            part_failures += 1
 
         if part_failures == 3:
             misses += 1
@@ -182,8 +175,8 @@ async def download_and_merge(link, folder_index, video_index, event):
 
         subprocess.run([
             "ffmpeg", "-f", "concat", "-safe", "0",
-            "-i", "file_list.txt", "-c", "copy", f"Lecture{video_index}.mp4"
-        ], cwd=output_dir, check=True)
+            "-i", list_path, "-c", "copy", output_video
+        ], check=True)
 
         logger.info(f"Merging completed for {output_video}.")
 
@@ -201,25 +194,25 @@ async def download_and_merge(link, folder_index, video_index, event):
                 logger.info(f"Uploading {output_video}: {percent}% done.")
                 try:
                     await progress_message.edit(f"Lecture {video_index}\nUploading... {percent}%")
-                except:
-                    pass  # Ignore FloodWait
+                except Exception:
+                    pass
 
         thumbnail_path = os.path.join(output_dir, f"thumb_{video_index}.jpg")
         width, height, duration = get_video_metadata(output_video, thumb_path=thumbnail_path)
 
         await client.send_file(
-            event.chat_id,
+            chat_id,
             output_video,
-            reply_to=topic_id,
+            reply_to=reply_to,
             caption=f"Lecture {video_index}",
-            thumb=thumbnail_path,  
+            thumb=thumbnail_path,
             progress_callback=progress_callback,
             attributes=[
                 DocumentAttributeVideo(
                     duration=int(duration),
                     w=width,
                     h=height,
-                    supports_streaming=True  # Important for videos
+                    supports_streaming=True
                 )
             ]
         )
@@ -231,7 +224,6 @@ async def download_and_merge(link, folder_index, video_index, event):
 
         logger.info(f"Lecture {video_index} uploaded successfully.")
 
-        # Clean up
         os.remove(list_path)
         for file in downloaded_files:
             try:
@@ -249,25 +241,24 @@ async def download_and_merge(link, folder_index, video_index, event):
 @client.on(events.NewMessage(pattern=r'^\.iit\s+(.+)', outgoing=True))
 async def handle_iit_command(event):
     topic_id = None 
-
     if getattr(event.reply_to, 'forum_topic', None):
-      topic_id = top if (top := event.reply_to.reply_to_top_id) \
-    else event.reply_to_msg_id 
+        topic_id = event.reply_to.reply_to_top_id
+    else:
+        topic_id = event.reply_to_msg_id
+
     global is_processing
     if is_processing:
-        #await event.reply("❌ Another task is already in progress. Please wait for it to finish before running again.")
         await client.send_message(event.chat_id, "❌ Another task is already in progress. Please wait for it to finish before running again.", reply_to=topic_id)
         return
-    
+
     set_processing_status(True)
-    
     await event.delete()
     logger.info("Received .iit command.")
+
     user_input = event.pattern_match.group(1)
     parts = user_input.split()
 
     if len(parts) < 2:
-        #await event.reply("❌ Usage: `.iit <start_no> <link1> <link2> ...`\n(up to 5 links allowed)")
         await client.send_message(event.chat_id, "❌ Usage: `.iit <start_no> <link1> <link2> ...`\n(up to 5 links allowed)", reply_to=topic_id)
         set_processing_status(False)
         return
@@ -275,14 +266,12 @@ async def handle_iit_command(event):
     try:
         start_index = int(parts[0])
     except ValueError:
-        #await event.reply("❌ Start number must be an integer.\nUsage: `.iit <start_no> <link1> <link2> ...`")
         await client.send_message(event.chat_id, "❌ Start number must be an integer.\nUsage: `.iit <start_no> <link1> <link2> ...`", reply_to=topic_id)
         set_processing_status(False)
         return
 
     links = parts[1:]
     if len(links) > MAX_LINKS:
-        #await event.reply(f"❌ You can provide up to {MAX_LINKS} links only.")
         await client.send_message(event.chat_id, f"❌ You can provide up to {MAX_LINKS} links only.", reply_to=topic_id)
         set_processing_status(False)
         return
@@ -291,7 +280,6 @@ async def handle_iit_command(event):
     for link in links:
         prefix, base_path, parsed_url = extract_details(link)
         if prefix is None:
-            #await event.reply(f"❌ Invalid URL format: {link}")
             await client.send_message(event.chat_id, f"❌ Invalid URL format: {link}", reply_to=topic_id)
             set_processing_status(False)
             return
@@ -299,14 +287,19 @@ async def handle_iit_command(event):
 
     clear_base_dir()
 
+    # Save necessary info from event now
+    chat_id = event.chat_id
+
     # Process all links concurrently
     tasks = []
     for idx, link in enumerate(valid_links):
         video_index = start_index + idx
-        tasks.append(asyncio.create_task(download_and_merge(link, idx + 1, video_index, event)))
+        tasks.append(asyncio.create_task(
+            download_and_merge(link, idx + 1, video_index, chat_id, topic_id)
+        ))
 
     await asyncio.gather(*tasks)
-    
+
     set_processing_status(False)
 
 @client.on(events.NewMessage(pattern=r'^\.ping$', outgoing=True))
