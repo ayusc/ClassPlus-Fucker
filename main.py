@@ -8,7 +8,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 
 # Configuration
 MAX_LINKS = 5
-BASE_DIR = "/sdcard/IITJAM"
+BASE_DIR = "IITJAM"
 MAX_PARTS = 10000
 START_PART = 0
 STOP_AFTER_MISSES = 3 
