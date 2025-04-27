@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 import requests
+import logging
 from urllib.parse import urlparse
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
@@ -12,6 +13,10 @@ BASE_DIR = "IITJAM"
 MAX_PARTS = 10000
 START_PART = 0
 STOP_AFTER_MISSES = 3
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Ensure BASE_DIR exists
 os.makedirs(BASE_DIR, exist_ok=True)
@@ -36,10 +41,13 @@ def extract_details(ts_url):
         return None, None, None
 
 async def download_and_merge(link, folder_index, video_index, update: Update, context: CallbackContext):
+    logger.info(f"Processing video {video_index} for link: {link}")
+    
     prefix, base_path, parsed_url = extract_details(link)
     if prefix is None:
         await context.bot.send_message(chat_id=update.effective_chat.id,
                                        text=f"Invalid URL format: {link}")
+        logger.error(f"Invalid URL format: {link}")
         return
 
     output_dir = os.path.join(BASE_DIR, str(folder_index))
@@ -51,6 +59,7 @@ async def download_and_merge(link, folder_index, video_index, update: Update, co
     # Send initial message
     progress_message = await context.bot.send_message(chat_id=update.effective_chat.id,
                                                       text=f"Lecture {video_index}\nDownloading parts...")
+    logger.info(f"Started downloading parts for video {video_index}...")
 
     misses = 0
     for i in range(START_PART, MAX_PARTS):
@@ -67,14 +76,17 @@ async def download_and_merge(link, folder_index, video_index, update: Update, co
                     for chunk in res.iter_content(chunk_size=1024):
                         f.write(chunk)
                 downloaded_files.append(part_name)
+                logger.info(f"Downloaded part: {part_name}")
                 misses = 0
             else:
                 misses += 1
                 if misses >= STOP_AFTER_MISSES:
+                    logger.warning(f"Failed to download part: {part_name}. Stopping after {STOP_AFTER_MISSES} misses.")
                     break
         except Exception as e:
             misses += 1
             if misses >= STOP_AFTER_MISSES:
+                logger.error(f"Error downloading part: {part_name}. Stopping after {STOP_AFTER_MISSES} misses.")
                 break
 
     if downloaded_files:
@@ -89,6 +101,7 @@ async def download_and_merge(link, folder_index, video_index, update: Update, co
             await context.bot.edit_message_text(chat_id=update.effective_chat.id,
                                                 message_id=progress_message.message_id,
                                                 text=f"Lecture {video_index}\nMerging parts...")
+            logger.info(f"Started merging parts for video {video_index}...")
 
             subprocess.run([
                 "ffmpeg", "-f", "concat", "-safe", "0",
@@ -116,24 +129,29 @@ async def download_and_merge(link, folder_index, video_index, update: Update, co
             await context.bot.edit_message_text(chat_id=update.effective_chat.id,
                                                 message_id=progress_message.message_id,
                                                 text=f"Lecture {video_index} processing completed successfully.")
+            logger.info(f"Video {video_index} processing completed successfully.")
+
         except subprocess.CalledProcessError:
             await context.bot.edit_message_text(chat_id=update.effective_chat.id,
                                                 message_id=progress_message.message_id,
                                                 text=f"Lecture {video_index} merging failed using ffmpeg.")
+            logger.error(f"Error merging video {video_index} using ffmpeg.")
     else:
         await context.bot.edit_message_text(chat_id=update.effective_chat.id,
                                             message_id=progress_message.message_id,
                                             text=f"Lecture {video_index} has no parts downloaded to merge.")
-
+        logger.warning(f"Video {video_index} has no parts downloaded to merge.")
 
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text("Bot is alive and ready to process your video links!")
+    logger.info("Bot started.")
 
 async def handle_links(update: Update, context: CallbackContext):
     user_input = update.message.text.strip()
     links = user_input.split()
     if len(links) > MAX_LINKS:
         await update.message.reply_text(f"Please provide up to {MAX_LINKS} links.")
+        logger.warning(f"User provided more than {MAX_LINKS} links.")
         return
 
     valid_links = []
@@ -141,10 +159,12 @@ async def handle_links(update: Update, context: CallbackContext):
         prefix, base_path, parsed_url = extract_details(link)
         if prefix is None:
             await update.message.reply_text(f"The specified URL is not in the correct format: {link}")
+            logger.error(f"Invalid link format: {link}")
             return
         valid_links.append(link)
 
     await update.message.reply_text("Processing your links. This may take a while...")
+    logger.info(f"Started processing {len(valid_links)} valid links.")
 
     for idx, link in enumerate(valid_links, 1):
         video_index = idx
