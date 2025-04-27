@@ -1,23 +1,28 @@
 import os
 import re
+import shutil
+import logging
 import subprocess
 import requests
-import logging
 from urllib.parse import urlparse
-from telegram import Update, Bot
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
-import shutil
+from telethon import TelegramClient, events
 
 # Configuration
-MAX_LINKS = 5
+API_ID = int(os.getenv("API_ID"))         # your Telegram api_id
+API_HASH = os.getenv("API_HASH")           # your Telegram api_hash
+SESSION_NAME = "userbot"                   # Session name for your userbot
 BASE_DIR = "CLASSPLUS"
+MAX_LINKS = 5
 MAX_PARTS = 10000
 START_PART = 0
 STOP_AFTER_MISSES = 3
 
-# Set up logging
+# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize Telethon client
+client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
 # Ensure BASE_DIR exists
 os.makedirs(BASE_DIR, exist_ok=True)
@@ -25,8 +30,8 @@ os.makedirs(BASE_DIR, exist_ok=True)
 def clear_base_dir():
     if os.path.exists(BASE_DIR):
         logger.info(f"Clearing contents of {BASE_DIR}...")
-        shutil.rmtree(BASE_DIR)  # Delete all contents of the directory
-    os.makedirs(BASE_DIR, exist_ok=True)  # Recreate the directory after clearing
+        shutil.rmtree(BASE_DIR)
+    os.makedirs(BASE_DIR, exist_ok=True)
 
 def extract_details(ts_url):
     parsed_url = urlparse(ts_url)
@@ -47,13 +52,12 @@ def extract_details(ts_url):
     else:
         return None, None, None
 
-async def download_and_merge(link, folder_index, video_index, update: Update, context: CallbackContext):
+async def download_and_merge(link, folder_index, video_index, event):
     logger.info(f"Processing video {video_index} for link: {link}")
-    
+
     prefix, base_path, parsed_url = extract_details(link)
     if prefix is None:
-        await context.bot.send_message(chat_id=update.effective_chat.id,
-                                       text=f"Invalid URL format: {link}")
+        await event.reply(f"Invalid URL format: {link}")
         logger.error(f"Invalid URL format: {link}")
         return
 
@@ -64,8 +68,7 @@ async def download_and_merge(link, folder_index, video_index, update: Update, co
     downloaded_files = []
 
     # Send initial message
-    progress_message = await context.bot.send_message(chat_id=update.effective_chat.id,
-                                                      text=f"Lecture {video_index}\nDownloading parts...")
+    progress_message = await event.reply(f"Lecture {video_index}\nDownloading parts...")
     logger.info(f"Started downloading parts for video {video_index}...")
 
     misses = 0
@@ -105,9 +108,7 @@ async def download_and_merge(link, folder_index, video_index, update: Update, co
         output_video = os.path.join(output_dir, f"Lecture{video_index}.mp4")
         try:
             # Update progress to merging
-            await context.bot.edit_message_text(chat_id=update.effective_chat.id,
-                                                message_id=progress_message.message_id,
-                                                text=f"Lecture {video_index}\nMerging parts...")
+            await progress_message.edit(f"Lecture {video_index}\nMerging parts...")
             logger.info(f"Started merging parts for video {video_index}...")
 
             subprocess.run([
@@ -116,15 +117,10 @@ async def download_and_merge(link, folder_index, video_index, update: Update, co
             ], cwd=output_dir, check=True)
 
             # Update progress to uploading
-            await context.bot.edit_message_text(chat_id=update.effective_chat.id,
-                                                message_id=progress_message.message_id,
-                                                text=f"Lecture {video_index}\nUploading to Telegram...")
+            await progress_message.edit(f"Lecture {video_index}\nUploading to Telegram...")
 
-            # Send video with progress
-            with open(output_video, 'rb') as video_file:
-                await context.bot.send_document(chat_id=update.effective_chat.id,
-                                                 document=video_file,
-                                                 filename=os.path.basename(output_video))
+            # Send video
+            await client.send_file(event.chat_id, output_video, caption=f"Lecture {video_index}")
 
             # Cleanup
             os.remove(list_path)
@@ -132,32 +128,22 @@ async def download_and_merge(link, folder_index, video_index, update: Update, co
                 os.remove(os.path.join(output_dir, file))
             os.remove(output_video)
 
-            # Final message
-            await context.bot.edit_message_text(chat_id=update.effective_chat.id,
-                                                message_id=progress_message.message_id,
-                                                text=f"Lecture {video_index} processing completed successfully.")
+            await progress_message.edit(f"Lecture {video_index} processing completed successfully.")
             logger.info(f"Video {video_index} processing completed successfully.")
 
         except subprocess.CalledProcessError:
-            await context.bot.edit_message_text(chat_id=update.effective_chat.id,
-                                                message_id=progress_message.message_id,
-                                                text=f"Lecture {video_index} merging failed using ffmpeg.")
+            await progress_message.edit(f"Lecture {video_index} merging failed using ffmpeg.")
             logger.error(f"Error merging video {video_index} using ffmpeg.")
     else:
-        await context.bot.edit_message_text(chat_id=update.effective_chat.id,
-                                            message_id=progress_message.message_id,
-                                            text=f"Lecture {video_index} has no parts downloaded to merge.")
+        await progress_message.edit(f"Lecture {video_index} has no parts downloaded to merge.")
         logger.warning(f"Video {video_index} has no parts downloaded to merge.")
 
-async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text("Bot is alive and ready to process your video links!")
-    logger.info("Bot started.")
-
-async def handle_links(update: Update, context: CallbackContext):
-    user_input = update.message.text.strip()
+@client.on(events.NewMessage(pattern=r'^\.iit\s+(.+)', outgoing=True))
+async def handle_links(event):
+    user_input = event.pattern_match.group(1)
     links = user_input.split()
     if len(links) > MAX_LINKS:
-        await update.message.reply_text(f"Please provide up to {MAX_LINKS} links.")
+        await event.reply(f"Please provide up to {MAX_LINKS} links.")
         logger.warning(f"User provided more than {MAX_LINKS} links.")
         return
 
@@ -165,28 +151,25 @@ async def handle_links(update: Update, context: CallbackContext):
     for link in links:
         prefix, base_path, parsed_url = extract_details(link)
         if prefix is None:
-            await update.message.reply_text(f"The specified URL is not in the correct format: {link}")
+            await event.reply(f"The specified URL is not in the correct format: {link}")
             logger.error(f"Invalid link format: {link}")
             return
         valid_links.append(link)
 
-    # Clear the IITJAM folder before processing new links
+    # Clear the BASE_DIR before processing new links
     clear_base_dir()
 
-    await update.message.reply_text("Processing your links. This may take a while...")
+    await event.reply("Processing your links. This may take a while...")
     logger.info(f"Started processing {len(valid_links)} valid links.")
 
     for idx, link in enumerate(valid_links, 1):
         video_index = idx
-        await download_and_merge(link, idx, video_index, update, context)
+        await download_and_merge(link, idx, video_index, event)
 
 def main():
-    application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
-
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_links))
-
-    application.run_polling()
+    client.start()
+    logger.info("Userbot started successfully.")
+    client.run_until_disconnected()
 
 if __name__ == "__main__":
     main()
