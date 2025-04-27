@@ -65,20 +65,35 @@ def extract_details(ts_url):
     else:
         return None, None, None
 
-def get_video_metadata(video_path):
+def get_video_metadata(video_path, thumb_path=None):
     probe = ffmpeg.probe(video_path)
     video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
     if video_stream is None:
         raise Exception('No video stream found')
+
     width = int(video_stream['width'])
     height = int(video_stream['height'])
     duration = float(video_stream['duration'])
+
+    # Create a thumbnail if path is provided
+    if thumb_path:
+        create_thumbnail(video_path, thumb_path)
+
     return width, height, duration
 
-import os
-import subprocess
-import requests
-import asyncio
+def create_thumbnail(video_path, thumb_path):
+    try:
+        (
+            ffmpeg
+            .input(video_path, ss=1)  # Capture frame at 1 second
+            .filter('scale', 320, -1)  # Resize width to 320px, maintain aspect ratio
+            .output(thumb_path, vframes=1)
+            .overwrite_output()
+            .run(quiet=True)
+        )
+    except Exception as e:
+        logger.error(f"Failed to create thumbnail: {e}")
+
 
 async def download_and_merge(link, folder_index, video_index, event):
     logger.info(f"Processing video {video_index} for link: {link}")
@@ -177,12 +192,14 @@ async def download_and_merge(link, folder_index, video_index, event):
                 except:
                     pass  # Ignore FloodWait
 
-        width, height, duration = get_video_metadata(output_video)
+        thumbnail_path = os.path.join(output_dir, f"thumb_{video_index}.jpg")
+        width, height, duration = get_video_metadata(output_video, thumb_path=thumbnail_path)
 
         await client.send_file(
             event.chat_id,
             output_video,
             caption=f"Lecture {video_index}",
+            thumb=thumbnail_path,  
             progress_callback=progress_callback,
             attributes=[
                 DocumentAttributeVideo(
@@ -193,7 +210,10 @@ async def download_and_merge(link, folder_index, video_index, event):
                 )
             ]
         )
-        
+        if os.path.exists(thumbnail_path):
+            os.remove(thumbnail_path)
+            logger.debug(f"Deleted thumbnail: {thumbnail_path}")
+
         await progress_message.delete()
         logger.info(f"Lecture {video_index} uploaded successfully.")
 
