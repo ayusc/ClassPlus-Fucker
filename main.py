@@ -4,6 +4,9 @@ import shutil
 import logging
 import subprocess
 import requests
+import asyncio
+import ffmpeg
+from telethon.tl.types import DocumentAttributeVideo
 from urllib.parse import urlparse
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
@@ -61,6 +64,16 @@ def extract_details(ts_url):
         return prefix, base_path, parsed_url
     else:
         return None, None, None
+
+def get_video_metadata(video_path):
+    probe = ffmpeg.probe(video_path)
+    video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
+    if video_stream is None:
+        raise Exception('No video stream found')
+    width = int(video_stream['width'])
+    height = int(video_stream['height'])
+    duration = float(video_stream['duration'])
+    return width, height, duration
 
 async def download_and_merge(link, folder_index, video_index, event):
     logger.info(f"Processing video {video_index} for link: {link}")
@@ -153,13 +166,23 @@ async def download_and_merge(link, folder_index, video_index, event):
                 except:
                     pass  # Ignore FloodWait
 
-        await client.send_file(
-            event.chat_id,
-            output_video,
-            caption=f"Lecture {video_index}",
-            progress_callback=progress_callback
-        )
+        width, height, duration = get_video_metadata(output_video)
 
+        await client.send_file(
+        event.chat_id,
+        output_video,
+        caption=f"Lecture {video_index}",
+        progress_callback=progress_callback,
+        attributes=[
+            DocumentAttributeVideo(
+                duration=int(duration),
+                w=width,
+                h=height,
+                supports_streaming=True  # Important for videos
+            )
+        ]
+        )
+        
         await progress_message.edit(f"Lecture {video_index}\nCompleted ✅")
         logger.info(f"Lecture {video_index} uploaded successfully.")
 
