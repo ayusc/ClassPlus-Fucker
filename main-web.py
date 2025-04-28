@@ -320,5 +320,5 @@ def start_bot():
 
 if __name__ == "__main__":
     threading.Thread(target=start_bot).start()
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
 
