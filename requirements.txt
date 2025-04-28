@@ -3,3 +3,5 @@ telethon
 python-dotenv
 ffmpeg-python
 aiohttp
+fastapi
+uvicorn
