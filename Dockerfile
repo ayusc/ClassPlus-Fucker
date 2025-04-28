@@ -24,7 +24,7 @@ RUN pip install -r requirements.txt
 COPY . .
 
 # Expose port for FastAPI
-EXPOSE 8080
+EXPOSE 8000
 
 # Start the bot + FastAPI
 CMD ["python", "main.py"]
