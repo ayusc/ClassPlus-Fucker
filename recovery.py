@@ -6,6 +6,11 @@ import logging
 from telethon import TelegramClient
 from telethon.tl.types import PeerChat
 from datetime import datetime
+from telethon.tl.types import DocumentAttributeVideo
+from urllib.parse import urlparse
+from telethon import TelegramClient, events
+from telethon.sessions import StringSession
+
 
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
