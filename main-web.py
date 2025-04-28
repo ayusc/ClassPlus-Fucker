@@ -319,6 +319,10 @@ def start_bot():
     client.run_until_disconnected()
 
 if __name__ == "__main__":
-    threading.Thread(target=start_bot).start()
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+    def start_telethon():
+        client.start()
+        logger.info("Userbot started successfully.")
+        client.run_until_disconnected()
 
+    threading.Thread(target=start_telethon, daemon=True).start()
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
