@@ -28,7 +28,7 @@ jobs:
 
       - name: Run Bot
         run: |
-          python main.py
+          python recovery.py
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
