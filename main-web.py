@@ -310,19 +310,26 @@ async def ping(event):
 app = FastAPI()
 
 @app.get("/")
-def read_root():
+def root():
+    logger.info("✅ GET / called")
     return {"status": "Running ✅"}
 
 @app.get("/health")
 def health():
+    logger.info("✅ Health check called")
     return {"status": "healthy"}
 
-# Start Telethon bot in background
+# Start Telethon in background thread
 def start_telethon():
+    logger.info("🚀 Starting Telethon client")
     client.start()
-    logger.info("Userbot started successfully.")
+    logger.info("✅ Telethon client started")
     client.run_until_disconnected()
 
 if __name__ == "__main__":
+    # Start Telethon bot
     threading.Thread(target=start_telethon, daemon=True).start()
-    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+
+    # Start FastAPI on 0.0.0.0
+    logger.info("🌐 Starting FastAPI on 0.0.0.0:8000")
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, log_level="info")
