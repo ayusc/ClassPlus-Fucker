@@ -185,6 +185,27 @@ async def download_video(link, folder_index, video_index, event, topic_id):
 
     return output_dir
 
+async def merge_video(output_dir, video_index, event, topic_id):
+    logger.info(f"Merging video {video_index} in folder {output_dir}")
+
+    list_path = os.path.join(output_dir, "file_list.txt")
+    downloaded_files = sorted([f for f in os.listdir(output_dir) if f.endswith(".ts")])
+
+    with open(list_path, 'w') as f:
+        for name in downloaded_files:
+            f.write(f"file '{name}'\n")
+
+    output_video = os.path.join(output_dir, f"Lecture{video_index}.mp4")
+
+    try:
+        subprocess.run([
+            "ffmpeg", "-f", "concat", "-safe", "0",
+            "-i", "file_list.txt", "-c", "copy", f"Lecture{video_index}.mp4"
+        ], cwd=output_dir, check=True)
+
+        logger.info(f"Merging completed: {output_video}")
+        return output_video
+
     except subprocess.CalledProcessError:
         await client.send_message(event.chat_id, f"Lecture {video_index}\nMerging failed ❌", reply_to=topic_id)
         logger.error(f"Merging failed for Lecture {video_index}")
