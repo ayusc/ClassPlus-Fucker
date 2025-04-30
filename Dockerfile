@@ -23,12 +23,10 @@ RUN pip install -r requirements.txt
 # Copy the entire app
 COPY . .
 
-# Health check for Koyeb and Docker
+# Update healthcheck to match FastAPI port and path
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
   CMD curl --fail http://localhost:8000/health || exit 1
 
-# Expose FastAPI port
 EXPOSE 8000
 
-# Run the combined bot + FastAPI app
-CMD ["python", "main-web.py"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
