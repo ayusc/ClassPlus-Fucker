@@ -329,7 +329,7 @@ def ping_self():
                 print(f"⚠️ Self-ping failed with status code {res.status_code}")
         except Exception as e:
             print(f"❌ Error in self-ping: {e}")
-        time.sleep(300)  # Sleep for 5 minutes (300 seconds)
+        time.sleep(60)  # Sleep for 5 minutes (300 seconds)
 
 # 🚀 Start Telethon in a background thread
 def start_telethon():
