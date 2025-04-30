@@ -14,6 +14,7 @@ from fastapi import FastAPI
 import uvicorn
 import threading
 import time
+from aiohttp import ClientSession
 
 # Configuration
 API_ID = int(os.getenv("API_ID"))
@@ -104,6 +105,26 @@ def create_thumbnail(video_path, thumb_path):
     except Exception as e:
         logger.error(f"Failed to create thumbnail: {e}")
 
+import aiohttp
+from aiohttp import ClientSession
+
+async def fetch_part(session, url, local_path, part_name, retries=3):
+    for attempt in range(retries):
+        try:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as res:
+                if res.status == 200:
+                    with open(local_path, 'wb') as f:
+                        async for chunk in res.content.iter_chunked(1024):
+                            f.write(chunk)
+                    logger.info(f"✅ Downloaded part: {part_name}")
+                    return part_name
+                else:
+                    logger.warning(f"Part not found: {part_name} (HTTP {res.status})")
+        except Exception as e:
+            logger.error(f"Error downloading {part_name}, attempt {attempt+1}: {e}")
+        await asyncio.sleep(1)
+    return None
+
 async def download_video(link, folder_index, video_index, event, topic_id):
     logger.info(f"Downloading video {video_index} from link: {link}")
     prefix, base_path, parsed_url = extract_details(link)
@@ -117,43 +138,45 @@ async def download_video(link, folder_index, video_index, event, topic_id):
     query = parsed_url.query
 
     downloaded_files = []
-
     progress_message = await client.send_message(event.chat_id, f"Lecture {video_index}\nDownloading...", reply_to=topic_id)
 
+    part_tasks = []
     misses = 0
-    for i in range(START_PART, MAX_PARTS):
-        part_name = f"{prefix}{i:03d}.ts"
-        full_url = f"{parsed_url.scheme}://{parsed_url.netloc}{base_path}/{part_name}"
-        if query:
-            full_url += f"?{query}"
 
-        local_path = os.path.join(output_dir, part_name)
+    async with aiohttp.ClientSession() as session:
+        for i in range(START_PART, MAX_PARTS):
+            part_name = f"{prefix}{i:03d}.ts"
+            full_url = f"{parsed_url.scheme}://{parsed_url.netloc}{base_path}/{part_name}"
+            if query:
+                full_url += f"?{query}"
 
-        if os.path.exists(local_path):
-            continue
+            local_path = os.path.join(output_dir, part_name)
 
-        part_failures = 0
-        while part_failures < 3:
-            try:
-                res = requests.get(full_url, stream=True, timeout=10)
-                if res.status_code == 200:
-                    with open(local_path, 'wb') as f:
-                        for chunk in res.iter_content(chunk_size=1024):
-                            f.write(chunk)
-                    downloaded_files.append(part_name)
-                    logger.info(f"✅ Downloaded part: {part_name}")
+            if os.path.exists(local_path):
+                continue
+
+            task = fetch_part(session, full_url, local_path, part_name)
+            part_tasks.append(task)
+
+            # Dispatch in chunks of 10 and wait
+            if len(part_tasks) >= 10:
+                results = await asyncio.gather(*part_tasks)
+                successes = [r for r in results if r]
+                failures = [r for r in results if r is None]
+
+                downloaded_files.extend(successes)
+                misses += len(failures)
+
+                if misses >= STOP_AFTER_MISSES:
                     break
-                else:
-                    logger.warning(f"Part not found: {part_name} (HTTP {res.status_code})")
-            except Exception as e:
-                logger.error(f"Error downloading {part_name}: {e}")
-            part_failures += 1
 
-        if part_failures == 3:
-            misses += 1
+                part_tasks = []
 
-        if misses >= STOP_AFTER_MISSES:
-            break
+        # Final flush
+        if part_tasks:
+            results = await asyncio.gather(*part_tasks)
+            successes = [r for r in results if r]
+            downloaded_files.extend(successes)
 
     if not downloaded_files:
         await progress_message.edit(f"Lecture {video_index}\nNo parts downloaded ❌")
