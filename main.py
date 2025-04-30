@@ -14,6 +14,7 @@ from fastapi import FastAPI
 import uvicorn
 import threading
 import time
+import aiohttp
 from aiohttp import ClientSession
 
 # Configuration
