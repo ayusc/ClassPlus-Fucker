@@ -10,8 +10,6 @@ from telethon.tl.types import DocumentAttributeVideo
 from urllib.parse import urlparse
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
-
-# Added
 from fastapi import FastAPI
 import uvicorn
 import threading
@@ -317,10 +315,7 @@ async def root():
 async def health():
     return {"status": "healthy"}
 
-# Create Telethon client
-client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
-
-# Start Telethon in a background event loop
+# Start Telethon in a background thread
 def start_telethon():
     async def main():
         logger.info("🚀 Starting Telethon client")
@@ -332,4 +327,5 @@ def start_telethon():
     asyncio.set_event_loop(loop)
     loop.run_until_complete(main())
 
+# ✅ Start thread AFTER handlers and client are set
 threading.Thread(target=start_telethon, daemon=True).start()
