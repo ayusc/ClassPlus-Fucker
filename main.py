@@ -16,6 +16,9 @@ import threading
 import time
 import aiohttp
 from aiohttp import ClientSession
+from FastTelethon import upload_file
+from telethon import events, utils
+from telethon.tl import types
 
 # Configuration
 API_ID = int(os.getenv("API_ID"))
@@ -233,21 +236,31 @@ async def upload_video(output_video, video_index, event, topic_id):
     thumbnail_path = os.path.join(os.path.dirname(output_video), f"thumb_{video_index}.jpg")
     width, height, duration = get_video_metadata(output_video, thumb_path=thumbnail_path)
 
-    await client.send_file(
-        event.chat_id,
-        output_video,
-        reply_to=topic_id,
-        caption=f"Lecture {video_index}",
-        thumb=thumbnail_path,
-        progress_callback=progress_callback,
-        attributes=[
-            DocumentAttributeVideo(
+    with open(output_video, "rb") as out:
+            res = await upload_file(client, out, progress_callback=progress_callback)
+            
+            mime_type = utils.get_attributess(output_video)
+        
+            media = types.InputMediaUploadedDocument(
+                file=res,
+                mime_type=mime_type,
+                attributes=[
+                DocumentAttributeVideo(
                 duration=int(duration),
                 w=width,
                 h=height,
                 supports_streaming=True
             )
-        ]
+            ],        
+                force_file=False
+            )
+    
+    await client.send_file(
+        event.chat_id,
+        media,
+        reply_to=topic_id,
+        caption=f"Lecture {video_index}",
+        thumb=thumbnail_path
     )
 
     if os.path.exists(thumbnail_path):
