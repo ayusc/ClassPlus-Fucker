@@ -105,9 +105,6 @@ def create_thumbnail(video_path, thumb_path):
     except Exception as e:
         logger.error(f"Failed to create thumbnail: {e}")
 
-import aiohttp
-from aiohttp import ClientSession
-
 async def fetch_part(session, url, local_path, part_name, retries=3):
     for attempt in range(retries):
         try:
@@ -117,13 +114,13 @@ async def fetch_part(session, url, local_path, part_name, retries=3):
                         async for chunk in res.content.iter_chunked(1024):
                             f.write(chunk)
                     logger.info(f"✅ Downloaded part: {part_name}")
-                    return part_name
+                    return True
                 else:
                     logger.warning(f"Part not found: {part_name} (HTTP {res.status})")
         except Exception as e:
             logger.error(f"Error downloading {part_name}, attempt {attempt+1}: {e}")
         await asyncio.sleep(1)
-    return None
+    return False
 
 async def download_video(link, folder_index, video_index, event, topic_id):
     logger.info(f"Downloading video {video_index} from link: {link}")
@@ -140,43 +137,42 @@ async def download_video(link, folder_index, video_index, event, topic_id):
     downloaded_files = []
     progress_message = await client.send_message(event.chat_id, f"Lecture {video_index}\nDownloading...", reply_to=topic_id)
 
-    part_tasks = []
     misses = 0
+    part_index = START_PART
 
     async with aiohttp.ClientSession() as session:
-        for i in range(START_PART, MAX_PARTS):
-            part_name = f"{prefix}{i:03d}.ts"
-            full_url = f"{parsed_url.scheme}://{parsed_url.netloc}{base_path}/{part_name}"
-            if query:
-                full_url += f"?{query}"
+        while part_index < MAX_PARTS and misses < STOP_AFTER_MISSES:
+            batch_tasks = []
+            batch_parts = []
 
-            local_path = os.path.join(output_dir, part_name)
+            for i in range(part_index, part_index + 10):
+                part_name = f"{prefix}{i:03d}.ts"
+                full_url = f"{parsed_url.scheme}://{parsed_url.netloc}{base_path}/{part_name}"
+                if query:
+                    full_url += f"?{query}"
+                local_path = os.path.join(output_dir, part_name)
 
-            if os.path.exists(local_path):
-                continue
+                if os.path.exists(local_path):
+                    continue
 
-            task = fetch_part(session, full_url, local_path, part_name)
-            part_tasks.append(task)
+                task = fetch_part(session, full_url, local_path, part_name)
+                batch_tasks.append(task)
+                batch_parts.append(part_name)
 
-            # Dispatch in chunks of 10 and wait
-            if len(part_tasks) >= 10:
-                results = await asyncio.gather(*part_tasks)
-                successes = [r for r in results if r]
-                failures = [r for r in results if r is None]
+            if not batch_tasks:
+                break  # nothing to do
 
-                downloaded_files.extend(successes)
-                misses += len(failures)
+            results = await asyncio.gather(*batch_tasks)
+            for success, part_name in zip(results, batch_parts):
+                if success:
+                    downloaded_files.append(part_name)
+                    misses = 0  # reset on success
+                else:
+                    misses += 1
+                    if misses >= STOP_AFTER_MISSES:
+                        break
 
-                if misses >= STOP_AFTER_MISSES:
-                    break
-
-                part_tasks = []
-
-        # Final flush
-        if part_tasks:
-            results = await asyncio.gather(*part_tasks)
-            successes = [r for r in results if r]
-            downloaded_files.extend(successes)
+            part_index += 10
 
     if not downloaded_files:
         await progress_message.edit(f"Lecture {video_index}\nNo parts downloaded ❌")
@@ -188,27 +184,6 @@ async def download_video(link, folder_index, video_index, event, topic_id):
     await progress_message.delete()
 
     return output_dir
-
-async def merge_video(output_dir, video_index, event, topic_id):
-    logger.info(f"Merging video {video_index} in folder {output_dir}")
-
-    list_path = os.path.join(output_dir, "file_list.txt")
-    downloaded_files = sorted([f for f in os.listdir(output_dir) if f.endswith(".ts")])
-
-    with open(list_path, 'w') as f:
-        for name in downloaded_files:
-            f.write(f"file '{name}'\n")
-
-    output_video = os.path.join(output_dir, f"Lecture{video_index}.mp4")
-
-    try:
-        subprocess.run([
-            "ffmpeg", "-f", "concat", "-safe", "0",
-            "-i", "file_list.txt", "-c", "copy", f"Lecture{video_index}.mp4"
-        ], cwd=output_dir, check=True)
-
-        logger.info(f"Merging completed: {output_video}")
-        return output_video
 
     except subprocess.CalledProcessError:
         await client.send_message(event.chat_id, f"Lecture {video_index}\nMerging failed ❌", reply_to=topic_id)
