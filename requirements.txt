@@ -5,3 +5,4 @@ ffmpeg-python
 aiohttp
 fastapi
 uvicorn
+cryptg
