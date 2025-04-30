@@ -141,6 +141,7 @@ async def download_video(link, folder_index, video_index, event, topic_id):
                         for chunk in res.iter_content(chunk_size=1024):
                             f.write(chunk)
                     downloaded_files.append(part_name)
+                    logger.info(f"✅ Downloaded part: {part_name}")
                     break
                 else:
                     logger.warning(f"Part not found: {part_name} (HTTP {res.status_code})")
