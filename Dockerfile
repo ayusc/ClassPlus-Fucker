@@ -31,4 +31,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
 EXPOSE 8000
 
 # Run the combined bot + FastAPI app
-CMD ["python", "main.py"]
+CMD ["python", "main-web.py"]
