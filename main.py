@@ -13,6 +13,7 @@ from telethon.sessions import StringSession
 from fastapi import FastAPI
 import uvicorn
 import threading
+import time
 
 # Configuration
 API_ID = int(os.getenv("API_ID"))
@@ -307,6 +308,8 @@ async def ping(event):
 
 app = FastAPI()
 
+app = FastAPI()
+
 @app.get("/")
 async def root():
     return {"status": "Running ✅"}
@@ -315,7 +318,20 @@ async def root():
 async def health():
     return {"status": "healthy"}
 
-# Start Telethon in a background thread
+# 🔁 Function to periodically ping the app's health endpoint
+def ping_self():
+    while True:
+        try:
+            res = requests.get("https://capitalist-coretta-ayusc-127d874e.koyeb.app/health")
+            if res.status_code == 200:
+                print("✅ Self-ping succeeded")
+            else:
+                print(f"⚠️ Self-ping failed with status code {res.status_code}")
+        except Exception as e:
+            print(f"❌ Error in self-ping: {e}")
+        time.sleep(300)  # Sleep for 5 minutes (300 seconds)
+
+# 🚀 Start Telethon in a background thread
 def start_telethon():
     async def main():
         logger.info("🚀 Starting Telethon client")
@@ -327,5 +343,6 @@ def start_telethon():
     asyncio.set_event_loop(loop)
     loop.run_until_complete(main())
 
-# ✅ Start thread AFTER handlers and client are set
+# ✅ Start both background threads after handlers are defined
 threading.Thread(target=start_telethon, daemon=True).start()
+threading.Thread(target=ping_self, daemon=True).start()  
