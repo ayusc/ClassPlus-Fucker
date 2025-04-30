@@ -309,8 +309,6 @@ async def ping(event):
 
 app = FastAPI()
 
-app = FastAPI()
-
 @app.get("/")
 async def root():
     return {"status": "Running ✅"}
