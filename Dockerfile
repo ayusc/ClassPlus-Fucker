@@ -23,8 +23,12 @@ RUN pip install -r requirements.txt
 # Copy the entire app
 COPY . .
 
-# Expose port for FastAPI
+# Health check for Koyeb and Docker
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD curl --fail http://localhost:8000/health || exit 1
+
+# Expose FastAPI port
 EXPOSE 8000
 
-# Start the bot + FastAPI
+# Run the combined bot + FastAPI app
 CMD ["python", "main.py"]
