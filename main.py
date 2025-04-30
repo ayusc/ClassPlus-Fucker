@@ -323,7 +323,7 @@ async def health():
 def ping_self():
     while True:
         try:
-            res = requests.get("https://capitalist-coretta-ayusc-127d874e.koyeb.app/health")
+            res = requests.get("https://amazing-margit-ayuschatterjee-94e3bcaf.koyeb.app/health")
             if res.status_code == 200:
                 print("✅ Self-ping succeeded")
             else:
