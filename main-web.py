@@ -313,16 +313,16 @@ app = FastAPI()
 def read_root():
     return {"status": "Running ✅"}
 
-def start_bot():
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
+# Start Telethon bot in background
+def start_telethon():
     client.start()
     logger.info("Userbot started successfully.")
     client.run_until_disconnected()
 
 if __name__ == "__main__":
-    def start_telethon():
-        client.start()
-        logger.info("Userbot started successfully.")
-        client.run_until_disconnected()
-
     threading.Thread(target=start_telethon, daemon=True).start()
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
