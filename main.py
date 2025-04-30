@@ -310,26 +310,26 @@ async def ping(event):
 app = FastAPI()
 
 @app.get("/")
-def root():
-    logger.info("✅ GET / called")
+async def root():
     return {"status": "Running ✅"}
 
 @app.get("/health")
-def health():
-    logger.info("✅ Health check called")
+async def health():
     return {"status": "healthy"}
 
-# Start Telethon in background thread
+# Create Telethon client
+client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
+
+# Start Telethon in a background event loop
 def start_telethon():
-    logger.info("🚀 Starting Telethon client")
-    client.start()
-    logger.info("✅ Telethon client started")
-    client.run_until_disconnected()
+    async def main():
+        logger.info("🚀 Starting Telethon client")
+        await client.start()
+        logger.info("✅ Telethon client started")
+        await client.run_until_disconnected()
 
-if __name__ == "__main__":
-    # Start Telethon bot
-    threading.Thread(target=start_telethon, daemon=True).start()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(main())
 
-    # Start FastAPI on 0.0.0.0
-    logger.info("🌐 Starting FastAPI on 0.0.0.0:8000")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, log_level="info")
+threading.Thread(target=start_telethon, daemon=True).start()
