@@ -21,7 +21,7 @@ from aiohttp import ClientSession
 from FastTelethon import upload_file
 from telethon import events, utils
 from telethon.tl import types
-import telethon 
+
 # Configuration
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
