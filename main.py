@@ -251,9 +251,9 @@ async def upload_video(output_video, video_index, event, topic_id):
                 force_file=False,
                 thumb=thumbnail_path)
     
-    await client.send_file(
+    await client.send_message(
         event.chat_id,
-        media,
+        file=media,
         reply_to=topic_id,
         caption=f"Lecture {video_index}")
 
