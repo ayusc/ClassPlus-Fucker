@@ -240,6 +240,7 @@ async def upload_video(output_video, video_index, event, topic_id):
 
     with open(output_video, "rb") as out:
          res = await upload_file(client, out, progress_callback=progress_callback)
+         res.name=f"Lecture {video_index}.mp4",
          thumbnail = await client.upload_file(thumbnail_path)
          mime_type = utils.get_attributes(output_video)
          """media = types.InputMediaUploadedDocument(
@@ -248,8 +249,8 @@ async def upload_video(output_video, video_index, event, topic_id):
                 attributes=[DocumentAttributeVideo(duration=int(duration), w=width, h=height, supports_streaming=True)],              
                 force_file=False,
                 thumb=thumbnail)"""
-        
-         media = (await client._file_to_media(res, thumb=thumbnail_path, res.name=f"Lecture {video_index}.mp4", supports_streaming=True))[1]
+         
+         media = (await client._file_to_media(res, thumb=thumbnail_path, supports_streaming=True))[1]
         
          print(media)
         
