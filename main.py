@@ -185,16 +185,14 @@ async def download_video(link, folder_index, video_index, event, topic_id):
         logger.warning(f"No parts downloaded for Lecture {video_index}")
         return None
 
+    await progress_message.edit(f"Lecture {video_index}\nDownloaded successfully ✅")
+    await asyncio.sleep(1)
     await progress_message.delete()
 
     return output_dir
 
-import re
-
 async def merge_video(output_dir, video_index, event, topic_id):
     logger.info(f"Merging video {video_index} in folder {output_dir}")
-
-    progress_message = await client.send_message(event.chat_id, f"Lecture {video_index}\nMerging... 0%", reply_to=topic_id)
 
     list_path = os.path.join(output_dir, "file_list.txt")
     downloaded_files = sorted([f for f in os.listdir(output_dir) if f.endswith(".ts")])
@@ -204,74 +202,20 @@ async def merge_video(output_dir, video_index, event, topic_id):
             f.write(f"file '{name}'\n")
 
     output_video = os.path.join(output_dir, f"Lecture{video_index}.mp4")
-    output_path = os.path.join(output_dir, f"Lecture{video_index}.mp4")
 
-    # Get estimated total duration of all .ts files
-    total_duration = 0
-    for file in downloaded_files:
-        full_path = os.path.join(output_dir, file)
-        result = subprocess.run(
-            ['ffprobe', '-v', 'error', '-show_entries',
-             'format=duration', '-of',
-             'default=noprint_wrappers=1:nokey=1', full_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        try:
-            total_duration += float(result.stdout.strip())
-        except:
-            continue
-
-    process = subprocess.Popen(
-        [
+    try:
+        subprocess.run([
             "ffmpeg", "-f", "concat", "-safe", "0",
             "-i", "file_list.txt", "-c", "copy", f"Lecture{video_index}.mp4"
-        ],
-        cwd=output_dir,
-        stderr=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
-        text=True,
-        bufsize=1
-    )
+        ], cwd=output_dir, check=True)
 
-    # Regular expression to extract "time=00:00:05.00"
-    time_pattern = re.compile(r"time=(\d+):(\d+):(\d+)\.(\d+)")
-
-    last_percent = -5
-    async for line in read_lines_async(process.stderr):
-        match = time_pattern.search(line)
-        if match:
-            hours, minutes, seconds, _ = map(int, match.groups())
-            elapsed = hours * 3600 + minutes * 60 + seconds
-            if total_duration > 0:
-                percent = int((elapsed / total_duration) * 100)
-                if percent >= last_percent + 5:
-                    last_percent = percent
-                    try:
-                        await progress_message.edit(f"Lecture {video_index}\nMerging... {percent}%")
-                    except:
-                        pass
-
-    returncode = process.wait()
-
-    if returncode == 0:
         logger.info(f"Merging completed: {output_video}")
-        await progress_message.delete()
-        return output_path
-    else:
-        await progress_message.edit(f"Lecture {video_index}\nMerging failed ❌")
+        return output_video
+
+    except subprocess.CalledProcessError:
+        await client.send_message(event.chat_id, f"Lecture {video_index}\nMerging failed ❌", reply_to=topic_id)
         logger.error(f"Merging failed for Lecture {video_index}")
         return None
-
-
-async def read_lines_async(stream):
-    loop = asyncio.get_event_loop()
-    while True:
-        line = await loop.run_in_executor(None, stream.readline)
-        if not line:
-            break
-        yield line
 
 async def upload_video(output_video, video_index, event, topic_id):
     logger.info(f"Uploading video {video_index}: {output_video}")
