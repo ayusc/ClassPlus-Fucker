@@ -249,7 +249,7 @@ async def upload_video(output_video, video_index, event, topic_id):
                 force_file=False,
                 thumb=thumbnail)"""
         
-         media = (await client._file_to_media(res, name=f"Lecture {video_index}.mp4", thumb=thumbnail_path, supports_streaming=True))[1]
+         media = (await client._file_to_media(res, res.name=f"Lecture {video_index}.mp4", thumb=thumbnail_path, supports_streaming=True))[1]
         
          print(media)
         
