@@ -21,7 +21,7 @@ from aiohttp import ClientSession
 from FastTelethon import upload_file
 from telethon import events, utils
 from telethon.tl import types
-
+import telethon 
 # Configuration
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
@@ -240,9 +240,9 @@ async def upload_video(output_video, video_index, event, topic_id):
 
     with open(output_video, "rb") as out:
          res = await upload_file(client, out, progress_callback=progress_callback)
-         res.name=f"Lecture {video_index}.mp4"
+         attributes = utils.get_attributes(output_video)
          thumbnail = await client.upload_file(thumbnail_path)
-         mime_type = utils.get_attributes(output_video)
+         #mime_type = utils.get_attributes(output_video)
          """media = types.InputMediaUploadedDocument(
                 file=res,
                 mime_type=mime_type,
@@ -250,7 +250,7 @@ async def upload_video(output_video, video_index, event, topic_id):
                 force_file=False,
                 thumb=thumbnail)"""
          
-         media = (await client._file_to_media(res, thumb=thumbnail_path, supports_streaming=True))[1]
+         media = (await client._file_to_media(res, thumb=thumbnail_path, attributes=attributes, supports_streaming=True))[1]
         
          print(media)
         
