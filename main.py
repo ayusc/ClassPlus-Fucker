@@ -247,7 +247,7 @@ async def upload_video(output_video, video_index, event, topic_id):
                 force_file=False,
                 thumb=thumbnail_path)
 
-         #print(media)
+         print(media)
          await client.send_file(
          event.chat_id,
          media,
