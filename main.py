@@ -247,9 +247,9 @@ async def upload_video(output_video, video_index, event, topic_id):
                 duration=int(duration),
                 w=width,
                 h=height,
-                supports_streaming=True),              
+                supports_streaming=True],              
                 force_file=False,
-                thumb=thumbnail_path)]
+                thumb=thumbnail_path)
 
          print(media)
          await client.send_file(
