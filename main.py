@@ -250,7 +250,8 @@ async def upload_video(output_video, video_index, event, topic_id):
                 supports_streaming=True),              
                 force_file=False,
                 thumb=thumbnail_path)
-        
+
+         print(media)
          await client.send_file(
          event.chat_id,
          media,
