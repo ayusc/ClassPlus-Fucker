@@ -193,7 +193,7 @@ async def download_video(link, folder_index, video_index, event, topic_id):
 
 async def merge_video(output_dir, video_index, event, topic_id):
     logger.info(f"Merging video {video_index} in folder {output_dir}")
-
+    progress_message = await client.send_message(event.chat_id, f"Lecture {video_index}\nMerging...", reply_to=topic_id)
     list_path = os.path.join(output_dir, "file_list.txt")
     downloaded_files = sorted([f for f in os.listdir(output_dir) if f.endswith(".ts")])
 
@@ -210,6 +210,7 @@ async def merge_video(output_dir, video_index, event, topic_id):
         ], cwd=output_dir, check=True)
 
         logger.info(f"Merging completed: {output_video}")
+        await progress_message.delete()
         return output_video
 
     except subprocess.CalledProcessError:
