@@ -16,7 +16,8 @@ import threading
 import time
 import aiohttp
 from aiohttp import ClientSession
-from FastTelethonhelper import fast_upload
+#from FastTelethonhelper import fast_upload
+from FastTelethon import upload_file
 from telethon import events, utils
 from telethon.tl import types
 
@@ -236,11 +237,10 @@ async def upload_video(output_video, video_index, event, topic_id):
     thumbnail_path = os.path.join(os.path.dirname(output_video), f"thumb_{video_index}.jpg")
     width, height, duration = get_video_metadata(output_video, thumb_path=thumbnail_path)
 
-    res = await fast_upload(client, output_video, name=f"Lecture {video_index}", progress_bar_function=progress_callback)
-            
-    mime_type = utils.get_attributes(output_video)
-        
-    media = types.InputMediaUploadedDocument(
+    with open(output_video, "rb") as out:
+         res = await upload_file(client, out, progress_callback=progress_bar)
+         mime_type = utils.get_attributes(output_video)
+         media = types.InputMediaUploadedDocument(
                 file=res,
                 mime_type=mime_type,
                 attributes=DocumentAttributeVideo(
@@ -250,12 +250,12 @@ async def upload_video(output_video, video_index, event, topic_id):
                 supports_streaming=True),              
                 force_file=False,
                 thumb=thumbnail_path)
-    
-    await client.send_message(
-        event.chat_id,
-        file=media,
-        reply_to=topic_id,
-        caption=f"Lecture {video_index}")
+        
+         await client.send_message(
+         event.chat_id,
+         media,
+         reply_to=topic_id,
+         caption=f"Lecture {video_index}")
 
     if os.path.exists(thumbnail_path):
         os.remove(thumbnail_path)
