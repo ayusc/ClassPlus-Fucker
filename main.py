@@ -239,29 +239,25 @@ async def upload_video(output_video, video_index, event, topic_id):
     with open(output_video, "rb") as out:
             res = await upload_file(client, out, progress_callback=progress_callback)
             
-            mime_type = utils.get_attributess(output_video)
+            mime_type = utils.get_attributes(output_video)
         
             media = types.InputMediaUploadedDocument(
                 file=res,
                 mime_type=mime_type,
-                attributes=[
-                DocumentAttributeVideo(
+                attributes=DocumentAttributeVideo(
                 duration=int(duration),
                 w=width,
                 h=height,
-                supports_streaming=True
-            )
-            ],        
-                force_file=False
+                supports_streaming=True),              
+                force_file=False,
+                thumb=thumbnail_path
             )
     
     await client.send_file(
         event.chat_id,
         media,
         reply_to=topic_id,
-        caption=f"Lecture {video_index}",
-        thumb=thumbnail_path
-    )
+        caption=f"Lecture {video_index}")
 
     if os.path.exists(thumbnail_path):
         os.remove(thumbnail_path)
