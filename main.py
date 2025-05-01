@@ -16,7 +16,7 @@ import threading
 import time
 import aiohttp
 from aiohttp import ClientSession
-from FastTelethon import upload_file
+from FastTelethonhelper import upload_file
 from telethon import events, utils
 from telethon.tl import types
 
