@@ -7,6 +7,7 @@ import requests
 import asyncio
 import ffmpeg
 from telethon.tl.types import DocumentAttributeVideo
+
 from urllib.parse import urlparse
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
@@ -239,15 +240,16 @@ async def upload_video(output_video, video_index, event, topic_id):
 
     with open(output_video, "rb") as out:
          res = await upload_file(client, out, progress_callback=progress_callback)
+         thumbnail = await client.upload_file(thumbnail_path)
          mime_type = utils.get_attributes(output_video)
-         #media = types.InputMediaUploadedDocument(
-         #       file=res,
-         #       mime_type=mime_type,
-         #       attributes=[DocumentAttributeVideo(duration=int(duration), w=width, h=height, supports_streaming=True)],              
-         #       force_file=False,
-         #       thumb=thumbnail_path)
+         media = types.InputMediaUploadedDocument(
+                file=res,
+                mime_type=mime_type,
+                attributes=[DocumentAttributeVideo(duration=int(duration), w=width, h=height, supports_streaming=True)],              
+                force_file=False,
+                thumb=thumbnail)
         
-         media = (await client._file_to_media(res, thumb=thumbnail_path, supports_streaming=True))[1]
+         #media = (await client._file_to_media(res, thumb=thumbnail_path, supports_streaming=True))[1]
         
          print(media)
         
