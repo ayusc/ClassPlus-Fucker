@@ -252,8 +252,10 @@ async def upload_video(output_video, video_index, event, topic_id):
          
          #media = (await client._file_to_media(res, thumb=thumbnail_path, attributes=attributes, supports_streaming=True))[1]
         
-         #print(media)
+         
+         print(utils.get_attributes(output_video)[0])
          res.name = 'f.mp4'
+         print(res)
          await client.send_file(
          event.chat_id,
          res,
