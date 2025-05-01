@@ -238,7 +238,7 @@ async def upload_video(output_video, video_index, event, topic_id):
     width, height, duration = get_video_metadata(output_video, thumb_path=thumbnail_path)
 
     with open(output_video, "rb") as out:
-         res = await upload_file(client, out, progress_callback=progress_bar)
+         res = await upload_file(client, out, progress_callback=progress_callback)
          mime_type = utils.get_attributes(output_video)
          media = types.InputMediaUploadedDocument(
                 file=res,
