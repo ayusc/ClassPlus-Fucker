@@ -6,4 +6,5 @@ aiohttp
 fastapi
 uvicorn
 cryptg
+hachoir
 #FastTelethonhelper
