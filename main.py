@@ -243,13 +243,13 @@ async def upload_video(output_video, video_index, event, topic_id):
          media = types.InputMediaUploadedDocument(
                 file=res,
                 mime_type=mime_type,
-                attributes=DocumentAttributeVideo(
+                attributes=[DocumentAttributeVideo(
                 duration=int(duration),
                 w=width,
                 h=height,
                 supports_streaming=True),              
                 force_file=False,
-                thumb=thumbnail_path)
+                thumb=thumbnail_path)]
 
          print(media)
          await client.send_file(
