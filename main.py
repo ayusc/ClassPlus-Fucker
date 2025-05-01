@@ -236,12 +236,11 @@ async def upload_video(output_video, video_index, event, topic_id):
     thumbnail_path = os.path.join(os.path.dirname(output_video), f"thumb_{video_index}.jpg")
     width, height, duration = get_video_metadata(output_video, thumb_path=thumbnail_path)
 
-    with open(output_video, "rb") as out:
-            res = await fast_upload(client, out, name=f"Lecture {video_index}", progress_bar_function=progress_callback)
+    res = await fast_upload(client, output_video, name=f"Lecture {video_index}", progress_bar_function=progress_callback)
             
-            mime_type = utils.get_attributes(output_video)
+    mime_type = utils.get_attributes(output_video)
         
-            media = types.InputMediaUploadedDocument(
+    media = types.InputMediaUploadedDocument(
                 file=res,
                 mime_type=mime_type,
                 attributes=DocumentAttributeVideo(
@@ -250,8 +249,7 @@ async def upload_video(output_video, video_index, event, topic_id):
                 h=height,
                 supports_streaming=True),              
                 force_file=False,
-                thumb=thumbnail_path
-            )
+                thumb=thumbnail_path)
     
     await client.send_file(
         event.chat_id,
