@@ -16,7 +16,7 @@ import threading
 import time
 import aiohttp
 from aiohttp import ClientSession
-from FastTelethonhelper import upload_file
+from FastTelethonhelper import fast_upload
 from telethon import events, utils
 from telethon.tl import types
 
@@ -237,7 +237,7 @@ async def upload_video(output_video, video_index, event, topic_id):
     width, height, duration = get_video_metadata(output_video, thumb_path=thumbnail_path)
 
     with open(output_video, "rb") as out:
-            res = await upload_file(client, out, progress_callback=progress_callback)
+            res = await fast_upload(client, out, name=f"Lecture {video_index}", progress_bar_function=progress_callback)
             
             mime_type = utils.get_attributes(output_video)
         
