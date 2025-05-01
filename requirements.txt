@@ -6,4 +6,4 @@ aiohttp
 fastapi
 uvicorn
 cryptg
-FastTelethonhelper
+#FastTelethonhelper
