@@ -240,14 +240,17 @@ async def upload_video(output_video, video_index, event, topic_id):
     with open(output_video, "rb") as out:
          res = await upload_file(client, out, progress_callback=progress_callback)
          mime_type = utils.get_attributes(output_video)
-         media = types.InputMediaUploadedDocument(
-                file=res,
-                mime_type=mime_type,
-                attributes=[DocumentAttributeVideo(duration=int(duration), w=width, h=height, supports_streaming=True)],              
-                force_file=False,
-                thumb=thumbnail_path)
-
+         #media = types.InputMediaUploadedDocument(
+         #       file=res,
+         #       mime_type=mime_type,
+         #       attributes=[DocumentAttributeVideo(duration=int(duration), w=width, h=height, supports_streaming=True)],              
+         #       force_file=False,
+         #       thumb=thumbnail_path)
+        
+         media = (await client._file_to_media(res, thumb=thumbnail_path, supports_streaming=True))[1]
+        
          print(media)
+        
          await client.send_file(
          event.chat_id,
          media,
