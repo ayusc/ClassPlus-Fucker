@@ -240,7 +240,7 @@ async def upload_video(output_video, video_index, event, topic_id):
 
     with open(output_video, "rb") as out:
          res = await upload_file(client, out, progress_callback=progress_callback)
-         res.name=f"Lecture {video_index}.mp4",
+         res.name=f"Lecture {video_index}.mp4"
          thumbnail = await client.upload_file(thumbnail_path)
          mime_type = utils.get_attributes(output_video)
          """media = types.InputMediaUploadedDocument(
