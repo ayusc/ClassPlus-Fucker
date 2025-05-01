@@ -260,7 +260,7 @@ async def upload_video(output_video, video_index, event, topic_id):
          event.chat_id,
          res,
          reply_to=topic_id,
-         attributes=utils.get_attributes(output_video)[0],
+         attributes=[DocumentAttributeVideo(duration=int(duration), w=width, h=height, supports_streaming=True)],
          caption=f"Lecture {video_index}",
          thumb=thumbnail_path,
          supports_streaming=True
