@@ -119,7 +119,7 @@ async def fetch_part(session, url, local_path, part_name, retries=3):
                     with open(local_path, 'wb') as f:
                         async for chunk in res.content.iter_chunked(1024):
                             f.write(chunk)
-                    logger.info(f"✅ Downloaded part: {part_name}")
+                    logger.info(f"Downloaded part: {part_name}")
                     return True
                 else:
                     logger.warning(f"Part not found: {part_name} (HTTP {res.status})")
@@ -181,11 +181,11 @@ async def download_video(link, folder_index, video_index, event, topic_id):
             part_index += 10
 
     if not downloaded_files:
-        await progress_message.edit(f"Lecture {video_index}\nNo parts downloaded ❌")
+        await progress_message.edit(f"Lecture {video_index}\nNo parts downloaded !")
         logger.warning(f"No parts downloaded for Lecture {video_index}")
         return None
 
-    await progress_message.edit(f"Lecture {video_index}\nDownloaded successfully ✅")
+    await progress_message.edit(f"Lecture {video_index}\nDownloaded successfully")
     await asyncio.sleep(1)
     await progress_message.delete()
 
@@ -214,7 +214,7 @@ async def merge_video(output_dir, video_index, event, topic_id):
         return output_video
 
     except subprocess.CalledProcessError:
-        await client.send_message(event.chat_id, f"Lecture {video_index}\nMerging failed ❌", reply_to=topic_id)
+        await client.send_message(event.chat_id, f"Lecture {video_index}\nMerging failed !", reply_to=topic_id)
         logger.error(f"Merging failed for Lecture {video_index}")
         return None
 
@@ -272,7 +272,7 @@ async def upload_video(output_video, video_index, event, topic_id):
 
     await progress_message.delete()
 
-    logger.info(f"Lecture {video_index} uploaded successfully ✅")
+    logger.info(f"Lecture {video_index} uploaded successfully")
 
 @client.on(events.NewMessage(pattern=r'^\.iit\s+(.+)', outgoing=True))
 async def handle_iit_command(event):
@@ -282,7 +282,7 @@ async def handle_iit_command(event):
 
     global is_processing
     if is_processing:
-        await client.send_message(event.chat_id, "❌ Another task is already running. Please wait.", reply_to=topic_id)
+        await client.send_message(event.chat_id, "Another task is already running. Please wait.", reply_to=topic_id)
         return
 
     set_processing_status(True)
@@ -294,20 +294,20 @@ async def handle_iit_command(event):
     parts = user_input.split()
 
     if len(parts) < 2:
-        await client.send_message(event.chat_id, "❌ Usage: `.iit <start_no> <link1> <link2> ...`", reply_to=topic_id)
+        await client.send_message(event.chat_id, "Usage: `.iit <start_no> <link1> <link2> ...`", reply_to=topic_id)
         set_processing_status(False)
         return
 
     try:
         start_index = int(parts[0])
     except ValueError:
-        await client.send_message(event.chat_id, "❌ Start number must be an integer.", reply_to=topic_id)
+        await client.send_message(event.chat_id, "Start number must be an integer.", reply_to=topic_id)
         set_processing_status(False)
         return
 
     links = parts[1:]
     if len(links) > MAX_LINKS:
-        await client.send_message(event.chat_id, f"❌ You can provide up to {MAX_LINKS} links only.", reply_to=topic_id)
+        await client.send_message(event.chat_id, f"You can provide up to {MAX_LINKS} links only.", reply_to=topic_id)
         set_processing_status(False)
         return
 
@@ -335,50 +335,42 @@ async def handle_iit_command(event):
         await upload_video(output_video, video_index, event, topic_id)
 
     set_processing_status(False)
-    logger.info("All tasks completed ✅")
+    logger.info("All tasks completed !")
 
 @client.on(events.NewMessage(pattern=r'^\.ping$', outgoing=True))
 async def ping(event):
     logger.info("Received .ping command.")
-    await event.reply("✅ Userbot is alive and running!")
-
-# ---- ADDED THIS SECTION ----
+    await event.reply("ClassPlus Fucker is alive and ready to receive links !")
 
 app = FastAPI()
 
 @app.get("/")
 async def root():
-    return {"status": "Running ✅"}
+    return {"status": "Running"}
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {"status": "Healthy"}
 
-# 🔁 Function to periodically ping the app's health endpoint
 def ping_self():
     while True:
         try:
             res = requests.get("https://amazing-margit-ayuschatterjee-94e3bcaf.koyeb.app/health")
             if res.status_code == 200:
-                print("✅ Self-ping succeeded")
+                #print("Self-ping succeeded")
             else:
                 print(f"⚠️ Self-ping failed with status code {res.status_code}")
         except Exception as e:
-            print(f"❌ Error in self-ping: {e}")
-        time.sleep(60)  # Sleep for 5 minutes (300 seconds)
+            print(f"Error in self-ping: {e}")
+        time.sleep(60)
 
-# 🚀 Start Telethon in a background thread
 def start_telethon():
-    async def main():
-        logger.info("🚀 Starting Telethon client")
+    async def runner():
         await client.start()
-        logger.info("✅ Telethon client started")
+        logger.info("Telethon client started")
         await client.run_until_disconnected()
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(main())
+    asyncio.run(runner())
 
-# ✅ Start both background threads after handlers are defined
 threading.Thread(target=start_telethon, daemon=True).start()
 threading.Thread(target=ping_self, daemon=True).start()  
