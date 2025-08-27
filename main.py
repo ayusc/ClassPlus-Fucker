@@ -17,7 +17,6 @@ import threading
 import time
 import aiohttp
 from aiohttp import ClientSession
-#from FastTelethonhelper import fast_upload
 from FastTelethon import upload_file
 from telethon import events, utils
 from telethon.tl import types
@@ -26,6 +25,7 @@ from telethon.tl import types
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 SESSION_STRING = os.getenv("SESSION_STRING")
+PING_URL = os.getenv("PING_URL")
 BASE_DIR = "CLASSPLUS"
 MAX_LINKS = 10
 MAX_PARTS = 10000
@@ -270,7 +270,7 @@ async def upload_video(output_video, video_index, event, topic_id):
 
     logger.info(f"Lecture {video_index} uploaded successfully")
 
-@client.on(events.NewMessage(pattern=r'^\.iit\s+(.+)', outgoing=True))
+@client.on(events.NewMessage(pattern=r'^\.cf\s+(.+)', outgoing=True))
 async def handle_iit_command(event):
     topic_id = None
     if getattr(event.reply_to, 'forum_topic', None):
@@ -284,13 +284,13 @@ async def handle_iit_command(event):
     set_processing_status(True)
     await event.delete()
 
-    logger.info("Received .iit command.")
+    logger.info("Received command.")
 
     user_input = event.pattern_match.group(1)
     parts = user_input.split()
 
     if len(parts) < 2:
-        await client.send_message(event.chat_id, "Usage: `.iit <start_no> <link1> <link2> ...`", reply_to=topic_id)
+        await client.send_message(event.chat_id, "Usage: `.cf <start_no> <link1> <link2> ...`", reply_to=topic_id)
         set_processing_status(False)
         return
 
@@ -351,7 +351,7 @@ async def health():
 def ping_self():
     while True:
         try:
-            res = requests.get("https://amazing-margit-ayuschatterjee-94e3bcaf.koyeb.app/health")
+            res = requests.get(PING_URL)
             if res.status_code == 200:
                 #print("Self-ping succeeded")
                 pass
