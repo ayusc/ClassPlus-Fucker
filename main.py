@@ -354,12 +354,13 @@ def ping_self():
             res = requests.get("https://amazing-margit-ayuschatterjee-94e3bcaf.koyeb.app/health")
             if res.status_code == 200:
                 #print("Self-ping succeeded")
+                pass
             else:
                 print(f"⚠️ Self-ping failed with status code {res.status_code}")
         except Exception as e:
             print(f"Error in self-ping: {e}")
         time.sleep(60)
-
+        
 def start_telethon():
     async def runner():
         await client.start()
