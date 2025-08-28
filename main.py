@@ -30,7 +30,7 @@ BASE_DIR = "CLASSPLUS"
 MAX_LINKS = 10
 MAX_PARTS = 10000
 START_PART = 0
-STOP_AFTER_MISSES = 5
+STOP_AFTER_MISSES = 20
 
 # Setup logging
 logging.basicConfig(
@@ -195,7 +195,13 @@ async def merge_video(output_dir, video_index, event, topic_id):
     logger.info(f"Merging video {video_index} in folder {output_dir}")
     progress_message = await client.send_message(event.chat_id, f"Lecture {video_index}\nMerging...", reply_to=topic_id)
 
-    downloaded_files = sorted([f for f in os.listdir(output_dir) if f.endswith(".ts")])
+    # downloaded_files = sorted([f for f in os.listdir(output_dir) if f.endswith(".ts")])
+    
+    downloaded_files = sorted(
+    [f for f in os.listdir(output_dir) if f.endswith(".ts")],
+    key=lambda x: int(re.search(r'\d+', x).group())
+    )
+    
     merged_ts = os.path.join(output_dir, "merged.ts")
 
     with open(merged_ts, "wb") as w:
@@ -206,7 +212,7 @@ async def merge_video(output_dir, video_index, event, topic_id):
     output_video = os.path.join(output_dir, f"Lecture{video_index}.mp4")
 
     subprocess.run([
-        "ffmpeg", "-i", "merged.ts", "-c", "copy", f"Lecture{video_index}.mp4"
+        "ffmpeg", "-i", "merged.ts", "-c", "copy", "-ignore_unknown", "-max_interleave_delta", "0", f"Lecture{video_index}.mp4"
     ], cwd=output_dir, check=True)
 
     await progress_message.delete()
@@ -356,7 +362,7 @@ def ping_self():
                 #print("Self-ping succeeded")
                 pass
             else:
-                print(f"⚠️ Self-ping failed with status code {res.status_code}")
+                print(f"Self-ping failed with status code {res.status_code}")
         except Exception as e:
             print(f"Error in self-ping: {e}")
         time.sleep(60)
