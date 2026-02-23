@@ -20,7 +20,7 @@ API_HASH = os.getenv("API_HASH")
 SESSION_STRING = os.getenv("SESSION_STRING")
 PING_URL = os.getenv("PING_URL", "")
 BASE_DIR = "PW_DOWNLOADS"
-MAX_PAIRS = 5  # Telegram message char limits will break if you send too many massive CloudFront URLs at once
+MAX_PAIRS = 10 
 
 # Setup logging
 logging.basicConfig(
