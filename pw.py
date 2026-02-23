@@ -114,14 +114,17 @@ async def download_pw_video(link, key, video_index, event, topic_id):
     )
     stdout, stderr = await process.communicate()
 
+    process = await asyncio.create_subprocess_exec(*cmd)
+    await process.wait()
+
     if os.path.exists(output_video):
         await progress_message.edit(f"Lecture {video_index}\nDownloaded successfully! Preparing upload...")
         await asyncio.sleep(1)
         await progress_message.delete()
         return output_video
     else:
-        logger.error(f"Failed to download Lecture {video_index}. Error: {stderr.decode()}")
-        await progress_message.edit(f"Lecture {video_index}\nDownload Failed! Check logs.")
+        logger.error(f"Failed to download Lecture {video_index}. Check your terminal for the exact N_m3u8DL-RE error.")
+        await progress_message.edit(f"Lecture {video_index}\nDownload Failed! Check terminal logs.")
         return None
 
 async def upload_video(output_video, video_index, event, topic_id):
