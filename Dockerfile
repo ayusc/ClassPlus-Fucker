@@ -6,12 +6,13 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 
-# Install system dependencies (ffmpeg for processing, curl for healthcheck, wget/tar for the downloader)
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
     wget \
     tar \
+    unzip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
