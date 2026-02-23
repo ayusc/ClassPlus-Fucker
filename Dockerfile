@@ -4,6 +4,7 @@ FROM python:3.10-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 
 # Install system dependencies (ffmpeg for processing, curl for healthcheck, wget/tar for the downloader)
 RUN apt-get update && apt-get install -y \
