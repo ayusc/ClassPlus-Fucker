@@ -6,7 +6,6 @@ import logging
 import asyncio
 from urllib.parse import urlparse
 from telethon import TelegramClient, events, utils
-from telethon.sessions import StringSession
 from telethon.tl.types import DocumentAttributeVideo
 from fastapi import FastAPI
 import threading
@@ -14,10 +13,10 @@ import time
 import requests
 from FastTelethon import upload_file
 
-# Configuration
+# Configuration 
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
-SESSION_STRING = os.getenv("SESSION_STRING")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 PING_URL = os.getenv("PING_URL", "")
 BASE_DIR = "PW_DOWNLOADS"
 MAX_PAIRS = 10 
@@ -29,12 +28,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize Telethon client
-if SESSION_STRING:
-    logger.info("Using provided session string to login.")
-    client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
+# Initialize Telethon client (using a local sqlite session file)
+if BOT_TOKEN:
+    logger.info("Initializing bot with provided BOT_TOKEN.")
+    client = TelegramClient("pw_bot_session", API_ID, API_HASH)
 else:
-    raise ValueError("SESSION_STRING environment variable not found!")
+    raise ValueError("BOT_TOKEN environment variable not found!")
 
 os.makedirs(BASE_DIR, exist_ok=True)
 is_processing = False
@@ -77,7 +76,7 @@ async def create_thumbnail(video_path, thumb_path):
     """Fully async thumbnail generation at the 5-second mark"""
     cmd = [
         "ffmpeg", "-y", "-i", video_path, 
-        "-ss", "00:00:05",  # Captures at 5 seconds to avoid intro black screens
+        "-ss", "00:00:05", 
         "-vframes", "1", 
         "-vf", "scale=320:-1", 
         thumb_path
@@ -108,12 +107,9 @@ async def download_pw_video(link, key, video_index, event, topic_id):
         "-M", "format=mp4"
     ]
 
-    # Run the blocking subprocess in a separate thread so it doesn't freeze the async bot.
-    # We use subprocess.run without pipes so it natively attaches to the Docker terminal.
     def run_downloader():
         import subprocess
         try:
-            # Setting stdout/stderr to None forces it to use the parent process's terminal
             subprocess.run(cmd, check=True, stdout=None, stderr=None)
             return True
         except subprocess.CalledProcessError as e:
@@ -130,7 +126,6 @@ async def download_pw_video(link, key, video_index, event, topic_id):
         return output_video
     else:
         await progress_message.edit(f"Lecture {video_index}\nDownload Failed! Check terminal logs.")
-        # Cleanup broken files
         for f in os.listdir(BASE_DIR):
             if f.startswith(save_name) and not f.endswith('.mp4'):
                 os.remove(os.path.join(BASE_DIR, f))
@@ -151,7 +146,6 @@ async def upload_video(output_video, video_index, event, topic_id):
             except:
                 pass
 
-    # Extract metadata and thumbnail safely
     thumbnail_path = os.path.join(BASE_DIR, f"thumb_{video_index}.jpg")
     width, height, duration = await get_video_metadata(output_video)
     await create_thumbnail(output_video, thumbnail_path)
@@ -172,12 +166,13 @@ async def upload_video(output_video, video_index, event, topic_id):
 
     if os.path.exists(thumbnail_path):
         os.remove(thumbnail_path)
-    os.remove(output_video)  # Cleanup to save server space
+    os.remove(output_video)
 
     await progress_message.delete()
     logger.info(f"Lecture {video_index} uploaded successfully")
 
-@client.on(events.NewMessage(pattern=r'^\.pw\s+(.+)', outgoing=True))
+# Changed to incoming=True and uses slash commands (allows bot mentions like /pw@MyBot)
+@client.on(events.NewMessage(pattern=r'(?i)^/pw(?:@[a-zA-Z0-9_]+)?\s+(.+)', incoming=True))
 async def handle_pw_command(event):
     topic_id = event.reply_to_msg_id if event.is_reply else None
 
@@ -187,13 +182,18 @@ async def handle_pw_command(event):
         return
 
     set_processing_status(True)
-    await event.delete()
+    
+    # Bots need admin rights to delete other users' messages in groups. Added a safe fallback.
+    try:
+        await event.delete()
+    except Exception:
+        pass
 
     user_input = event.pattern_match.group(1).strip()
     parts = user_input.split()
 
     if len(parts) < 3 or (len(parts) - 1) % 2 != 0:
-        await client.send_message(event.chat_id, "Usage: `.pw <start_no> <link1> <key1> <link2> <key2> ...`", reply_to=topic_id)
+        await client.send_message(event.chat_id, "Usage: `/pw <start_no> <link1> <key1> <link2> <key2> ...`", reply_to=topic_id)
         set_processing_status(False)
         return
 
@@ -204,7 +204,6 @@ async def handle_pw_command(event):
         set_processing_status(False)
         return
 
-    # Group the remaining arguments into Link/Key pairs
     items = parts[1:]
     link_key_pairs = [(items[i], items[i+1]) for i in range(0, len(items), 2)]
 
@@ -217,22 +216,18 @@ async def handle_pw_command(event):
 
     for idx, (link, key) in enumerate(link_key_pairs):
         video_index = start_index + idx
-        
-        # Download and Decrypt
         output_video = await download_pw_video(link, key, video_index, event, topic_id)
         
-        # Upload
         if output_video:
             await upload_video(output_video, video_index, event, topic_id)
         else:
             logger.warning(f"Skipping upload for Lecture {video_index} due to download failure.")
 
     set_processing_status(False)
-    #await client.send_message(event.chat_id, "All tasks completed!", reply_to=topic_id)
 
-@client.on(events.NewMessage(pattern=r'^\.ping$', outgoing=True))
+@client.on(events.NewMessage(pattern=r'(?i)^/ping(?:@[a-zA-Z0-9_]+)?$', incoming=True))
 async def ping(event):
-    await event.reply("PW Downloader is alive and ready!")
+    await event.reply("PW Downloader Bot is alive and ready!")
 
 # --- FastAPI & Background Tasks ---
 app = FastAPI()
@@ -254,8 +249,9 @@ def ping_self():
         
 def start_telethon():
     async def runner():
-        await client.start()
-        logger.info("Telethon client started")
+        # Passing the bot token directly to the start method
+        await client.start(bot_token=BOT_TOKEN)
+        logger.info("Telethon Bot client started successfully!")
         await client.run_until_disconnected()
     asyncio.run(runner())
 
