@@ -17,9 +17,9 @@ RUN apt-get update && apt-get install -y \
 # Download and install the specific v0.5.1-beta of N_m3u8DL-RE
 RUN wget https://github.com/nilaoda/N_m3u8DL-RE/releases/download/v0.5.1-beta/N_m3u8DL-RE_v0.5.1-beta_linux-x64_20251029.tar.gz -O downloader.tar.gz \
     && tar -xvf downloader.tar.gz \
-    && mv N_m3u8DL-RE_v0.5.1-beta_linux-x64*/N_m3u8DL-RE /usr/local/bin/ \
+    && mv N_m3u8DL-RE /usr/local/bin/ \
     && chmod +x /usr/local/bin/N_m3u8DL-RE \
-    && rm -rf downloader.tar.gz N_m3u8DL-RE_v0.5.1-beta_linux-x64*
+    && rm -f downloader.tar.gz
 
 # Set working directory
 WORKDIR /app
