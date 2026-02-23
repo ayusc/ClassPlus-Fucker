@@ -228,7 +228,7 @@ async def handle_pw_command(event):
             logger.warning(f"Skipping upload for Lecture {video_index} due to download failure.")
 
     set_processing_status(False)
-    await client.send_message(event.chat_id, "All tasks completed!", reply_to=topic_id)
+    #await client.send_message(event.chat_id, "All tasks completed!", reply_to=topic_id)
 
 @client.on(events.NewMessage(pattern=r'^\.ping$', outgoing=True))
 async def ping(event):
