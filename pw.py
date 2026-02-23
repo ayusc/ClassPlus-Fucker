@@ -94,7 +94,6 @@ async def download_pw_video(link, key, video_index, event, topic_id):
     save_name = f"Lecture_{video_index}"
     output_video = os.path.join(BASE_DIR, f"{save_name}.mp4")
 
-    # The magic N_m3u8DL-RE command tailored for PhysicsWallah
     cmd = [
         "N_m3u8DL-RE",
         link,
@@ -109,22 +108,32 @@ async def download_pw_video(link, key, video_index, event, topic_id):
         "-M", "format=mp4"
     ]
 
-    process = await asyncio.create_subprocess_exec(
-        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-    )
-    stdout, stderr = await process.communicate()
+    # Run the blocking subprocess in a separate thread so it doesn't freeze the async bot.
+    # We use subprocess.run without pipes so it natively attaches to the Docker terminal.
+    def run_downloader():
+        import subprocess
+        try:
+            # Setting stdout/stderr to None forces it to use the parent process's terminal
+            subprocess.run(cmd, check=True, stdout=None, stderr=None)
+            return True
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Downloader failed with exit code: {e.returncode}")
+            return False
 
-    process = await asyncio.create_subprocess_exec(*cmd)
-    await process.wait()
+    loop = asyncio.get_running_loop()
+    success = await loop.run_in_executor(None, run_downloader)
 
-    if os.path.exists(output_video):
+    if success and os.path.exists(output_video):
         await progress_message.edit(f"Lecture {video_index}\nDownloaded successfully! Preparing upload...")
         await asyncio.sleep(1)
         await progress_message.delete()
         return output_video
     else:
-        logger.error(f"Failed to download Lecture {video_index}. Check your terminal for the exact N_m3u8DL-RE error.")
         await progress_message.edit(f"Lecture {video_index}\nDownload Failed! Check terminal logs.")
+        # Cleanup broken files
+        for f in os.listdir(BASE_DIR):
+            if f.startswith(save_name) and not f.endswith('.mp4'):
+                os.remove(os.path.join(BASE_DIR, f))
         return None
 
 async def upload_video(output_video, video_index, event, topic_id):
