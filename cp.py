@@ -276,7 +276,7 @@ async def upload_video(output_video, video_index, event, topic_id):
 
     logger.info(f"Lecture {video_index} uploaded successfully")
 
-@client.on(events.NewMessage(pattern=r'^\.cf\s+(.+)', outgoing=True))
+@client.on(events.NewMessage(pattern=r'^\.cp\s+(.+)', outgoing=True))
 async def handle_iit_command(event):
     topic_id = None
     if getattr(event.reply_to, 'forum_topic', None):
@@ -296,7 +296,7 @@ async def handle_iit_command(event):
     parts = user_input.split()
 
     if len(parts) < 2:
-        await client.send_message(event.chat_id, "Usage: `.cf <start_no> <link1> <link2> ...`", reply_to=topic_id)
+        await client.send_message(event.chat_id, "Usage: `.cp <start_no> <link1> <link2> ...`", reply_to=topic_id)
         set_processing_status(False)
         return
 
