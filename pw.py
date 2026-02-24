@@ -97,13 +97,15 @@ async def download_pw_video(link, key, video_index, event, topic_id):
         "N_m3u8DL-RE",
         link,
         "--key", key,
+        "--thread-count", "8",        # Optimizes CPU usage for free tier
         "--append-url-params",
         "--auto-select",
-        "-H", "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0",
+        "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0",
         "-H", "Referer: https://www.pw.live/",
         "--save-dir", BASE_DIR,
-        "--tmp-dir", BASE_DIR,
+        "--tmp-dir", BASE_DIR,       
         "--save-name", save_name,
+        "--del-after-done",           # Instantly cleans up fragments to save disk space
         "-M", "format=mp4"
     ]
 
@@ -171,7 +173,14 @@ async def upload_video(output_video, video_index, event, topic_id):
     await progress_message.delete()
     logger.info(f"Lecture {video_index} uploaded successfully")
 
-# Changed to incoming=True and uses slash commands (allows bot mentions like /pw@MyBot)
+@client.on(events.Action)
+async def delete_service_messages(event):
+    try:
+        await event.delete()
+    except Exception:
+        pass
+
+# Main command handler
 @client.on(events.NewMessage(pattern=r'(?i)^/pw(?:@[a-zA-Z0-9_]+)?\s+(.+)', incoming=True))
 async def handle_pw_command(event):
     topic_id = event.reply_to_msg_id if event.is_reply else None
@@ -183,7 +192,6 @@ async def handle_pw_command(event):
 
     set_processing_status(True)
     
-    # Bots need admin rights to delete other users' messages in groups. Added a safe fallback.
     try:
         await event.delete()
     except Exception:
@@ -222,6 +230,9 @@ async def handle_pw_command(event):
             await upload_video(output_video, video_index, event, topic_id)
         else:
             logger.warning(f"Skipping upload for Lecture {video_index} due to download failure.")
+            
+        # Aggressive cleanup after EVERY lecture to prevent Koyeb disk throttling
+        clear_base_dir()
 
     set_processing_status(False)
 
@@ -249,7 +260,6 @@ def ping_self():
         
 def start_telethon():
     async def runner():
-        # Passing the bot token directly to the start method
         await client.start(bot_token=BOT_TOKEN)
         logger.info("Telethon Bot client started successfully!")
         await client.run_until_disconnected()
