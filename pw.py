@@ -173,11 +173,14 @@ async def upload_video(output_video, video_index, event, topic_id):
     await progress_message.delete()
     logger.info(f"Lecture {video_index} uploaded successfully")
 
-@client.on(events.Action)
+@client.on(events.ChatAction)
 async def delete_service_messages(event):
     try:
+        # ChatAction covers pins, user joins, name changes, etc.
         await event.delete()
+        logger.info("Deleted a system service message.")
     except Exception:
+        # Fails silently if the bot lacks admin rights
         pass
 
 # Main command handler
