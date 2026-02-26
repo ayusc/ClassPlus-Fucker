@@ -19,7 +19,7 @@ API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 PING_URL = os.getenv("PING_URL", "")
 BASE_DIR = "PW_DOWNLOADS"
-MAX_PAIRS = 10 
+MAX_PAIRS = 5 # Telegram message limit length limit supports upto 5 links 
 
 # Setup logging
 logging.basicConfig(
