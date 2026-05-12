@@ -24,6 +24,7 @@ MAX_PAIRS = 5 # Telegram message limit length limit supports upto 5 links
 OWNER_ID = int(os.getenv("OWNER_ID"))
 KOYEB_API_TOKEN = os.getenv("KOYEB_API_TOKEN").strip()
 KOYEB_SERVICE_ID = os.getenv("KOYEB_SERVICE_ID").strip()
+SHOULD_EARNXP = os.getenv("SHOULD_EARNXP", "true").strip().lower() == "true"
 
 # Setup logging
 logging.basicConfig(
@@ -485,8 +486,12 @@ def start_telethon():
         await client.start(bot_token=BOT_TOKEN)
         logger.info("Telethon Bot client started successfully!")
         
-        # Start the background task alongside the bot
-        asyncio.create_task(daily_xp_scheduler())
+        # Start the background task 
+        if SHOULD_EARNXP:
+            asyncio.create_task(daily_xp_scheduler())
+            logger.info("Daily XP scheduler started.")
+        else:
+            logger.info("Daily XP scheduler is disabled.")
         
         await client.run_until_disconnected()
     asyncio.run(runner())
